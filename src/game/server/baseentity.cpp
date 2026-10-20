@@ -5,6 +5,11 @@
 //===========================================================================//
 
 #include "cbase.h"
+
+#ifdef _WIN32
+#include <excpt.h>		// PORTAL: EXCEPTION_EXECUTE_HANDLER for the SendProxy AnimTime SEH guard
+#endif
+
 #include "globalstate.h"
 #include "isaverestore.h"
 #include "client.h"
