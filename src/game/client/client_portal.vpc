@@ -46,6 +46,7 @@ $Project "Client (Portal)"
 			$File	"portal\c_weapon_portalgun.h"
 			$File	"portal\PortalRender.cpp"
 			$File	"portal\PortalRender.h"
+			$File	"portal\portal_client_gamerules.cpp"
 			$File	"portal\portal_render_targets.cpp"
 			$File	"portal\portal_render_targets.h"
 		}
