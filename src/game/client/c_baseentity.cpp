@@ -6,6 +6,11 @@
 //===========================================================================//
 #include "cbase.h"
 #include "c_baseentity.h"
+
+#ifdef _WIN32
+#include <excpt.h>		// PORTAL: EXCEPTION_EXECUTE_HANDLER for the RecvProxy AnimTime SEH guard
+#endif
+
 #include "prediction.h"
 #include "model_types.h"
 #include "iviewrender_beams.h"
@@ -313,10 +318,22 @@ int CRecordingList::Count()
 //			*pIn - 
 //			objectID - 
 //-----------------------------------------------------------------------------
-void RecvProxy_AnimTime( const CRecvProxyData *pData, void *pStruct, void *pOut )
+// PORTAL: Split the body so it can be SEH-wrapped on Windows. A corrupted
+// entity reaches this proxy as 0xFF..FF (or otherwise garbage) and faults in
+// entindex(); log the property source and skip the update instead of killing
+// the client during the first snapshot.
+static void RecvProxy_AnimTimeInternal( const CRecvProxyData *pData, void *pStruct, void *pOut )
 {
 	C_BaseEntity *pEntity = ( C_BaseEntity * )pStruct;
 	Assert( pOut == &pEntity->m_flAnimTime );
+
+	// Cheap trap for clearly bogus pointers; the SEH wrapper catches the rest.
+	if ( ( (uintptr_t)pStruct >= 0xFFF0000000000000ULL ) || ( (uintptr_t)pStruct < 0x1000ULL ) )
+	{
+		const char *pszProp = ( pData != NULL && pData->m_pRecvProp != NULL ) ? pData->m_pRecvProp->GetName() : "?";
+		Msg( "RecvProxy_AnimTime: invalid pStruct %p (prop '%s')\n", pStruct, pszProp );
+		return;
+	}
 
 	int t;
 	int tickbase;
@@ -339,6 +356,23 @@ void RecvProxy_AnimTime( const CRecvProxyData *pData, void *pStruct, void *pOut 
 		t -= 256;
 	
 	pEntity->m_flAnimTime = ( t * TICK_INTERVAL );
+}
+
+void RecvProxy_AnimTime( const CRecvProxyData *pData, void *pStruct, void *pOut )
+{
+#if defined( _WIN32 )
+	__try
+	{
+		RecvProxy_AnimTimeInternal( pData, pStruct, pOut );
+	}
+	__except( EXCEPTION_EXECUTE_HANDLER )
+	{
+		const char *pszProp = ( pData != NULL && pData->m_pRecvProp != NULL ) ? pData->m_pRecvProp->GetName() : "?";
+		Msg( "RecvProxy_AnimTime: access violation, pStruct %p (prop '%s')\n", pStruct, pszProp );
+	}
+#else
+	RecvProxy_AnimTimeInternal( pData, pStruct, pOut );
+#endif
 }
 
 void RecvProxy_SimulationTime( const CRecvProxyData *pData, void *pStruct, void *pOut )
