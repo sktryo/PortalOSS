@@ -58,6 +58,40 @@ if errorlevel 1 (
 	exit /b 1
 )
 
+rem ---------------------------------------------------------------------
+rem Discover the solution configuration matching the requested one.
+rem VPC emits solution entries such as "Release|x64" but the exact platform
+rem name depends on the generated projects, and MSBuild rejects a
+rem Configuration/Platform pair the solution does not list. Parse the sln's
+rem solution configuration section and use whatever it actually contains.
+rem ---------------------------------------------------------------------
+set "SOLCFG="
+set "SOLCONFIG="
+set "SOLPLATFORM="
+set "SOLCFGLIST=%TEMP%\portal_solution_configs.txt"
+powershell -NoProfile -Command "Select-String -Path 'portal.sln' -Pattern '^\s*[A-Za-z][A-Za-z0-9_]*\s*\|\s*[A-Za-z0-9_ ]+\s*=' | ForEach-Object { ($_.Line -split '=')[0].Trim() } | Select-Object -Unique | Set-Content -Encoding ASCII '%SOLCFGLIST%'" >nul 2>&1
+
+if exist "%SOLCFGLIST%" (
+	for /f "usebackq delims=" %%L in ("%SOLCFGLIST%") do (
+		echo %%L | findstr /i /c:"%CONFIG%|" >nul && set "SOLCFG=%%L"
+	)
+	del "%SOLCFGLIST%" >nul 2>&1
+)
+
+if not defined SOLCFG (
+	echo [buildportal] No solution configuration matching "%CONFIG%" was found in portal.sln.
+	echo [buildportal] Regenerate the projects with createportalprojects.bat and retry.
+	exit /b 1
+)
+
+for /f "tokens=1,2 delims=| " %%A in ("%SOLCFG%") do (
+	set "SOLCONFIG=%%A"
+	set "SOLPLATFORM=%%B"
+)
+set "CFGARGS=/p:Configuration=%SOLCONFIG%"
+if defined SOLPLATFORM set "CFGARGS=%CFGARGS% /p:Platform=%SOLPLATFORM%"
+echo [buildportal] solution configuration: %SOLCONFIG%^|%SOLPLATFORM%
+
 if /i "%TARGET%"=="server" (
 	set "PROJECT=Server (Portal)"
 	goto :have_target
@@ -78,19 +112,19 @@ exit /b 1
 :have_target
 if /i "%ACTION%"=="rebuild" (
 	echo [buildportal] Rebuild %PROJECT% ^(%CONFIG%^)
-	msbuild portal.sln /m /t:"%PROJECT%:Rebuild" /p:Configuration=%CONFIG% /v:m /clp:ErrorsOnly;Summary
+	msbuild portal.sln /m /t:"%PROJECT%:Rebuild" %CFGARGS% /v:m /clp:ErrorsOnly;Summary
 ) else (
 	echo [buildportal] Build %PROJECT% ^(%CONFIG%^)
-	msbuild portal.sln /m /t:"%PROJECT%" /p:Configuration=%CONFIG% /v:m /clp:ErrorsOnly;Summary
+	msbuild portal.sln /m /t:"%PROJECT%" %CFGARGS% /v:m /clp:ErrorsOnly;Summary
 )
 exit /b %errorlevel%
 
 :build_all
 if /i "%ACTION%"=="rebuild" (
 	echo [buildportal] Rebuild solution ^(%CONFIG%^)
-	msbuild portal.sln /m /t:Rebuild /p:Configuration=%CONFIG% /v:m /clp:ErrorsOnly;Summary
+	msbuild portal.sln /m /t:Rebuild %CFGARGS% /v:m /clp:ErrorsOnly;Summary
 ) else (
 	echo [buildportal] Build solution ^(%CONFIG%^)
-	msbuild portal.sln /m /t:Build /p:Configuration=%CONFIG% /v:m /clp:ErrorsOnly;Summary
+	msbuild portal.sln /m /t:Build %CFGARGS% /v:m /clp:ErrorsOnly;Summary
 )
 exit /b %errorlevel%
