@@ -11,6 +11,7 @@
 #include "portal_util_shared.h"
 #include "portal_shareddefs.h"
 #include "te_effect_dispatch.h"
+#include "func_portal_volumes.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -365,10 +366,51 @@ CProp_Portal *Portal_PlacePortal( PortalType type, const cplane_t &tracePlane, c
 	Vector vecRight, vecUp;
 	UTIL_Portal_GetSurfaceBasis( tracePlane.normal, vecRight, vecUp );
 
-	Vector vLeftBottom = vecPortalCenter - vecRight * flNewWidth - vecUp * flNewHeight;
-	Vector vRightBottom = vecPortalCenter + vecRight * flNewWidth - vecUp * flNewHeight;
-	Vector vRightTop = vecPortalCenter + vecRight * flNewWidth + vecUp * flNewHeight;
-	Vector vLeftTop = vecPortalCenter - vecRight * flNewWidth + vecUp * flNewHeight;
+	// func_portal_orientation: portals placed inside an active orientation
+	// volume get their opening rolled so the bottom edge (bright end) points
+	// along the volume's AnglesToFace direction.
+	QAngle angOrientation;
+	if ( Portal_GetOrientationForPosition( vecPortalCenter, angOrientation ) )
+	{
+		Vector vecFaceDir;
+		AngleVectors( angOrientation, &vecFaceDir );
+		vecFaceDir -= tracePlane.normal * DotProduct( vecFaceDir, tracePlane.normal );
+		if ( vecFaceDir.NormalizeInPlace() > 0.7f )
+		{
+			vecUp = -vecFaceDir;
+			vecRight = CrossProduct( vecUp, tracePlane.normal );
+			vecRight.NormalizeInPlace();
+		}
+	}
+
+	// func_noportal_volume / func_portal_bumper: the portal footprint must
+	// not intersect these volumes. A shot on a surface inside a noportal
+	// volume fizzles; anything else gets nudged out of the way.
+	Vector vecPlacementCenter = vecPortalCenter;
+	bool bCenterMoved = false;
+	if ( !Portal_AdjustPlacementForVolumes( vecPlacementCenter, tracePlane.normal,
+											vecRight, vecUp, flNewWidth, flNewHeight,
+											bCenterMoved ) )
+	{
+		UTIL_Remove( pNewPortal );
+		return NULL;
+	}
+
+	if ( bCenterMoved )
+	{
+		// The opening sits in different space now; measure the room again so
+		// the portal still fits on the surface.
+		if ( !pNewPortal->FindPlacementExtents( vecPlacementCenter, tracePlane, flNewWidth, flNewHeight ) )
+		{
+			UTIL_Remove( pNewPortal );
+			return NULL;
+		}
+	}
+
+	Vector vLeftBottom = vecPlacementCenter - vecRight * flNewWidth - vecUp * flNewHeight;
+	Vector vRightBottom = vecPlacementCenter + vecRight * flNewWidth - vecUp * flNewHeight;
+	Vector vRightTop = vecPlacementCenter + vecRight * flNewWidth + vecUp * flNewHeight;
+	Vector vLeftTop = vecPlacementCenter - vecRight * flNewWidth + vecUp * flNewHeight;
 
 	pNewPortal->Spawn();
 	pNewPortal->SetupPortalCorners( vLeftBottom, vRightBottom, vRightTop, vLeftTop );

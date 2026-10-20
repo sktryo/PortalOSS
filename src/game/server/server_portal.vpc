@@ -76,6 +76,8 @@ $Project "Server (Portal)"
 			$File	"portal\linked_portal_door.cpp"
 			$File	"portal\prop_weighted_cube.cpp"
 			$File	"portal\trigger_portal_cleanser.cpp"
+			$File	"portal\func_portal_volumes.cpp"
+			$File	"portal\func_portal_volumes.h"
 			$File	"portal\weapon_portalgun.cpp"
 			$File	"portal\weapon_portalgun.h"
 		}

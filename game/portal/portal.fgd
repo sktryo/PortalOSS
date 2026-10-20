@@ -97,6 +97,67 @@
 [
 ]
 
+// Portal volume brush entities. All of them use their bounding box, so
+// concave regions should be split into multiple brush entities. Volumes
+// should protrude at least two units from the surfaces they affect.
+@SolidClass base(Targetname) color(255 0 0) =
+	func_noportal_volume : "Surfaces inside the brush act as unportalable when the portal gun shoots them. Portals placed at the edge get nudged out of the volume instead"
+[
+	spawnflags(flags) =
+	[
+		1 : "Start inactive" : 0
+	]
+	StartDisabled(boolean) : "Start Disabled" : 0
+	input Activate(void) : "Turns on blocking functionality"
+	input Deactivate(void) : "Turns off blocking functionality"
+	input Toggle(void) : "Toggles blocking functionality"
+]
+
+@SolidClass base(Targetname) color(255 0 0) =
+	func_portal_bumper : "Portals that would touch the brush are moved so they do not touch it (used to place portals flush against unportalable surfaces). The brush should protrude at least two units from the surfaces it touches"
+[
+	spawnflags(flags) =
+	[
+		1 : "Start inactive" : 0
+	]
+	StartDisabled(boolean) : "Start Disabled" : 0
+	input Activate(void) : "Turns on bumping functionality"
+	input Deactivate(void) : "Turns off bumping functionality"
+	input Toggle(void) : "Toggles bumping functionality"
+]
+
+@SolidClass base(Targetname) color(255 128 0) =
+	func_portal_orientation : "Portals placed inside the brush are oriented so their bottom edge (bright end) points along the AnglesToFace direction"
+[
+	spawnflags(flags) =
+	[
+		1 : "Start inactive" : 0
+	]
+	StartDisabled(boolean) : "Start Disabled" : 0
+	AnglesToFace(angles) : "Angles to face" : "0 0 0" : "Direction the portal's bottom edge should point in"
+	input Activate(void) : "Makes the entity active"
+	input Deactivate(void) : "Makes the entity inactive"
+	input Toggle(void) : "Toggles the entity"
+]
+
+@SolidClass base(Targetname) color(0 255 0) =
+	func_portal_detector : "Fires outputs when portals are placed inside the brush"
+[
+	spawnflags(flags) =
+	[
+		1 : "Start inactive" : 0
+	]
+	StartDisabled(boolean) : "Start Disabled" : 0
+	LinkageGroupID(integer) : "Portal pair ID" : 0 : "Which portals to detect. 0 in single player (only one portal pair is implemented)"
+	input Activate(void) : "Turns on the detector"
+	input Deactivate(void) : "Turns off the detector"
+	input Toggle(void) : "Toggles the detector"
+	output OnStartTouchPortal1(void) : "Fires when portal 1 (blue) is placed inside the volume"
+	output OnStartTouchPortal2(void) : "Fires when portal 2 (orange) is placed inside the volume"
+	output OnStartTouchLinkedPortal(void) : "Fires when an open portal is placed inside the volume, or an inside portal becomes linked"
+	output OnStartTouchBothLinkedPortals(void) : "Fires when both portals of the pair are inside the volume and linked"
+]
+
 // ---------------------------------------------------------------------------
 // Weapons (the gun is given to players at spawn; for pickup entity authors)
 // ---------------------------------------------------------------------------
