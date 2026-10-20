@@ -313,6 +313,7 @@ int CRecordingList::Count()
 
 // PORTAL: The VPC files compile with fopen=dont_use_fopen, so undo that
 // locally; this is a plain diagnostic log, not engine file I/O.
+#include <stdio.h>
 #ifdef fopen
 #undef fopen
 #endif
