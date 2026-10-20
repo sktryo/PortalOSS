@@ -53,9 +53,11 @@ void C_Prop_Portal::OnDataChanged( DataUpdateType_t updateType )
 	UpdatePortalPlaneFromCorners();
 	RecalculatePortalTransforms();
 
-	Portal_DebugLog( "[portal] client portal data: type=%d activated=%d linked=%s corners_valid=%d origin=(%.1f %.1f %.1f)",
+	Portal_DebugLog( "[portal] client portal data: type=%d activated=%d linked=%s corners_valid=%d origin=(%.1f %.1f %.1f) BL=(%.1f %.1f %.1f) TR=(%.1f %.1f %.1f)",
 		m_iPortalType, m_bActivated ? 1 : 0, ( m_hLinkedPortal.Get() != NULL ) ? "yes" : "no",
-		HasValidCorners() ? 1 : 0, GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z );
+		HasValidCorners() ? 1 : 0, GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z,
+		m_vPortalCorners[0].x, m_vPortalCorners[0].y, m_vPortalCorners[0].z,
+		m_vPortalCorners[2].x, m_vPortalCorners[2].y, m_vPortalCorners[2].z );
 }
 
 bool C_Prop_Portal::ShouldDraw( void )

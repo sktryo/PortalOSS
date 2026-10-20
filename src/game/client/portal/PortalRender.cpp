@@ -358,21 +358,48 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 	//collect the portals that can be seen from here
 	CUtlVector<C_Prop_Portal *> visiblePortals;
 	int iPortalCount = CProp_Portal_Shared::AllPortals.Count();
+
+	// Throttled diagnostics: portal_debug.log gets one block every 2 seconds
+	// describing why portals are or are not drawn.
+	static float s_flNextRenderLog = 0.0f;
+	bool bLogRender = ( gpGlobals->curtime >= s_flNextRenderLog );
+	if ( bLogRender )
+	{
+		s_flNextRenderLog = gpGlobals->curtime + 2.0f;
+		Portal_DebugLog( "[portal] render: viewid=%d recursion=%d portals=%d", iViewId, m_iViewRecursionLevel, iPortalCount );
+	}
+
 	for ( int i = 0; i < iPortalCount; ++i )
 	{
 		C_Prop_Portal *pPortal = CProp_Portal_Shared::AllPortals[i];
-		if ( pPortal == NULL || !pPortal->IsActivatedAndLinked() )
+		if ( pPortal == NULL )
+			continue;
+
+		Vector vecToPortal = pPortal->GetPortalOrigin() - CurrentViewOrigin();
+		float flDot = DotProduct( pPortal->m_plane_Origin.normal, vecToPortal );
+
+		if ( bLogRender )
+		{
+			Portal_DebugLog( "[portal] render candidate %d: act=%d linked=%s corners=%d origin=(%.1f %.1f %.1f) normal=(%.2f %.2f %.2f) dist2=%.0f dot=%.2f draw=%d",
+				i, pPortal->m_bActivated ? 1 : 0,
+				( pPortal->m_hLinkedPortal.Get() != NULL ) ? "yes" : "no",
+				pPortal->HasValidCorners() ? 1 : 0,
+				pPortal->GetPortalOrigin().x, pPortal->GetPortalOrigin().y, pPortal->GetPortalOrigin().z,
+				pPortal->m_plane_Origin.normal.x, pPortal->m_plane_Origin.normal.y, pPortal->m_plane_Origin.normal.z,
+				vecToPortal.LengthSqr(), flDot, pPortal->m_bDrawInPortalRender ? 1 : 0 );
+		}
+
+		if ( !pPortal->IsActivatedAndLinked() )
 			continue;
 
 		if ( pPortal->m_bDrawInPortalRender == false )
 			continue;
 
-		Vector vecToPortal = pPortal->GetPortalOrigin() - CurrentViewOrigin();
 		if ( vecToPortal.LengthSqr() > ( PORTAL_MAX_VIEW_DISTANCE * PORTAL_MAX_VIEW_DISTANCE ) )
 			continue;
 
 		//must face the camera
-		if ( DotProduct( pPortal->m_plane_Origin.normal, vecToPortal ) <= 0.0f )
+		if ( flDot <= 0.0f )
 			continue;
 
 		visiblePortals.AddToTail( pPortal );
@@ -394,12 +421,22 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 			if ( DotProduct( pPortal->m_plane_Origin.normal, vecToPortal ) <= 0.0f )
 				continue;
 
+			if ( bLogRender )
+				Portal_DebugLog( "[portal] render: drawing dormant surface for portal %d", i );
+
 			DrawDormantPortalSurface( pPortal );
 		}
 	}
 
 	if ( visiblePortals.Count() == 0 )
+	{
+		if ( bLogRender )
+			Portal_DebugLog( "[portal] render: nothing to draw (visible=%d)", visiblePortals.Count() );
 		return false;
+	}
+
+	if ( bLogRender )
+		Portal_DebugLog( "[portal] render: drawing %d portal view(s)", visiblePortals.Count() );
 
 	CMatRenderContextPtr pRenderContext( materials );
 
@@ -425,6 +462,10 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 		C_Prop_Portal *pExitPortal = pEnterPortal->m_hLinkedPortal;
 		if ( pExitPortal == NULL )
 			continue;
+
+		if ( bLogRender )
+			Portal_DebugLog( "[portal] render: stencil view through portal %d (type %d) -> exit type %d",
+				i, pEnterPortal->m_iPortalType, pExitPortal->m_iPortalType );
 
 		//build the virtual view through the portal
 		CViewSetup portalView;
