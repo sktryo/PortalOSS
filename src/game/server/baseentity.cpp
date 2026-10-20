@@ -158,8 +158,22 @@ static void SendProxy_AnimTimeInternal( const SendProp *pProp, const void *pStru
 	if ( ( (uintptr_t)pStruct >= 0xFFF0000000000000ULL ) || ( (uintptr_t)pStruct < 0x1000ULL ) )
 	{
 		PortalLogBadAnimTime( "invalid pStruct", pProp, pStruct, pVarData, pOut, iElement, objectID );
-		pOut->m_Int = 0;
-		return;
+
+		// The engine hands out a sentinel struct base (-1) for the player
+		// during the first snapshot, but the edict itself is already valid.
+		// Recover the entity from the edict and encode normally.
+		pEntity = NULL;
+		edict_t *pEdict = engine->PEntityOfEntIndex( objectID );
+		if ( pEdict != NULL && pEdict->GetUnknown() != NULL )
+		{
+			pEntity = pEdict->GetUnknown()->GetBaseEntity();
+		}
+
+		if ( pEntity == NULL )
+		{
+			pOut->m_Int = 0;
+			return;
+		}
 	}
 
 #if defined( _DEBUG )
