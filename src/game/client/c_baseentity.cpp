@@ -45,6 +45,7 @@
 #include "cdll_bounded_cvars.h"
 #include "inetchannelinfo.h"
 #include "proto_version.h"
+#include <fstream>	// PORTAL: portal_animtime.log (see PortalLogBadRecvAnimTime)
 
 #ifdef TF_CLIENT_DLL
 #include "c_tf_player.h"
@@ -313,9 +314,8 @@ int CRecordingList::Count()
 
 // PORTAL: The VPC files compile with fopen=dont_use_fopen, and cbase.h pulls
 // in <stdio.h> while that macro is active, so the CRT only ever declares a
-// function named dont_use_fopen. Use the STL stream instead of stdio here.
-#include <fstream>
-
+// function named dont_use_fopen. Use the STL stream instead of stdio here
+// (included at the top of the file, before memdbgon.h).
 //-----------------------------------------------------------------------------
 // Purpose: Decodes animtime and notes when it changes
 // Input  : *pStruct - ( C_BaseEntity * ) used to flag animtime is changine

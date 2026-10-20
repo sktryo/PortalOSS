@@ -62,6 +62,7 @@
 #include "tier0/icommandline.h"
 #include "vphysics/friction.h"
 #include <ctype.h>
+#include <fstream>	// PORTAL: portal_animtime.log (see PortalLogBadAnimTime)
 #include "datacache/imdlcache.h"
 #include "ModelSoundsCache.h"
 #include "env_debughistory.h"
@@ -107,9 +108,8 @@ ConVar sv_script_think_interval("sv_script_think_interval", "0.1");
 
 // PORTAL: The VPC files compile with fopen=dont_use_fopen, and cbase.h pulls
 // in <stdio.h> while that macro is active, so the CRT only ever declares a
-// function named dont_use_fopen. Use the STL stream instead of stdio here.
-#include <fstream>
-
+// function named dont_use_fopen. Use the STL stream instead of stdio here
+// (included at the top of the file, before memdbgon.h).
 // This table encodes edict data.
 // PORTAL: The engine hands us the entity being packed. When a corrupted
 // edict reaches this proxy it faults in the struct/body deref, which kills
