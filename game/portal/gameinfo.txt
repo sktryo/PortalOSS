@@ -13,10 +13,32 @@
 		//
 		// Search paths are relative to the base directory.
 		//
+		// |gameinfo_path|           points at game/portal.
+		// |all_source_engine_paths| points at the directory holding the HL2
+		//	shared content (the install root of the running SteamAppId), so
+		//	on an AppID 400 install that resolves to ...\common\Portal\hl2 —
+		//	mirroring the original Portal gameinfo.
+		//
 		SearchPaths
 		{
+			// Mod dir first, so our own overrides win
 			Game				|gameinfo_path|.
-			Game				|gameinfo_path|../../PortalData	// stock Portal content (materials, models, maps, scripts, sounds)
+
+			// Stock Portal content. Portal packs its content into VPKs, so
+			// the pak/VO archives must be mounted explicitly; the folder
+			// mount is a fallback for loose files.
+			Game				|gameinfo_path|../../PortalData/portal_pak.vpk
+			Game+mod			|gameinfo_path|../../PortalData/portal_sound_vo_english.vpk
+			Game				|gameinfo_path|../../PortalData
+
+			// HL2 shared content, exactly like the original Portal gameinfo
+			Game				|all_source_engine_paths|hl2/hl2_textures.vpk
+			Game				|all_source_engine_paths|hl2/hl2_sound_vo_english.vpk
+			Game				|all_source_engine_paths|hl2/hl2_sound_misc.vpk
+			Game				|all_source_engine_paths|hl2/hl2_misc.vpk
+			platform			|all_source_engine_paths|platform/platform_misc.vpk
+			Game				|all_source_engine_paths|hl2
+			platform			|all_source_engine_paths|platform
 		}
 	}
 }
