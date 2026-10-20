@@ -10,6 +10,7 @@
 #include "in_buttons.h"
 #include "prop_portal_shared.h"
 #include "portal_util_shared.h"
+#include "portal_internal.h"
 #include "portal_shareddefs.h"
 #include "portal_player.h"
 
@@ -20,6 +21,42 @@
 
 LINK_ENTITY_TO_CLASS( weapon_portalgun, CWeaponPortalGun );
 PRECACHE_WEAPON_REGISTER( weapon_portalgun );
+
+//-----------------------------------------------------------------------------
+// Purpose: Do the two portals' openings sit on the same part of the same wall?
+//			Portals sharing a plane and overlapping in-plane cannot coexist.
+//-----------------------------------------------------------------------------
+static bool s_PortalRectanglesOverlap( CProp_Portal *pA, CProp_Portal *pB )
+{
+	if ( pA == NULL || pB == NULL )
+		return false;
+
+	// A different face is never overlapping
+	if ( DotProduct( pA->GetPortalNormal(), pB->GetPortalNormal() ) < 0.9f )
+		return false;
+
+	// Different plane offsets are separated along the normal
+	float flPlaneDelta = fabs( DotProduct( pA->GetPortalNormal(), pB->GetPortalOrigin() ) - pA->m_plane_Origin.dist );
+	if ( flPlaneDelta > 8.0f )
+		return false;
+
+	// Axis-aligned overlap test on the world bounds of the corners
+	Vector vecMinA, vecMaxA, vecMinB, vecMaxB;
+	ClearBounds( vecMinA, vecMaxA );
+	ClearBounds( vecMinB, vecMaxB );
+	for ( int i = 0; i < 4; ++i )
+	{
+		AddPointToBounds( pA->m_vPortalCorners[i], vecMinA, vecMaxA );
+		AddPointToBounds( pB->m_vPortalCorners[i], vecMinB, vecMaxB );
+	}
+
+	if ( vecMinA.x > vecMaxB.x || vecMinB.x > vecMaxA.x ||
+		 vecMinA.y > vecMaxB.y || vecMinB.y > vecMaxA.y ||
+		 vecMinA.z > vecMaxB.z || vecMinB.z > vecMaxA.z )
+		return false;
+
+	return true;
+}
 
 IMPLEMENT_SERVERCLASS_ST( CWeaponPortalBase, DT_WeaponPortalBase )
 END_SEND_TABLE()
@@ -119,6 +156,11 @@ bool CWeaponPortalGun::FirePortal( PortalType type )
 	if ( tr.fraction >= 1.0f || !tr.DidHitWorld() )
 		return false;
 
+	// Don't place portals on surfaces that can't hold them: no-draw faces,
+	// sky faces, and explicit no-portal surfaces.
+	if ( tr.surface.flags & ( SURF_NODRAW | SURF_SKY | SURF_SKY2D | SURF_NOPORTAL | SURF_NOLIGHT ) )
+		return false;
+
 	// Don't place portals on the backside of surfaces
 	if ( DotProduct( tr.plane.normal, vecDir ) > 0.2f )
 		return false;
@@ -176,6 +218,14 @@ bool CWeaponPortalGun::FirePortal( PortalType type )
 		if ( ( ( type == PORTAL_TYPE_BLUE ) && ( pPortal->GetPortalType() == PORTAL_TYPE_ORANGE ) ) ||
 			 ( ( type == PORTAL_TYPE_ORANGE ) && ( pPortal->GetPortalType() == PORTAL_TYPE_BLUE ) ) )
 		{
+			// The other color portal cannot survive the new portal covering
+			// the same spot: fizzle it and keep looking for a link target.
+			if ( s_PortalRectanglesOverlap( pNewPortal, pPortal ) )
+			{
+				pPortal->Fizzle( PORTAL_FIZZLE_KILLED );
+				continue;
+			}
+
 			pOtherColorPortal = pPortal;
 		}
 	}
