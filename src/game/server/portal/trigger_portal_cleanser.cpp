@@ -71,7 +71,12 @@ bool CTriggerPortalCleanser::IsPointInsideCleanser( const Vector &vecPoint )
 //-----------------------------------------------------------------------------
 void CTriggerPortalCleanser::CleanserThink( void )
 {
-	//fizzle any active portals intersecting the brush
+	// fizzle any active portals whose opening intersects the brush
+	Vector vecMins, vecMaxs;
+	CollisionProp()->WorldSpaceAABB( &vecMins, &vecMaxs );
+	Vector vecCenter = ( vecMins + vecMaxs ) * 0.5f;
+	Vector vecExtents = ( vecMaxs - vecMins ) * 0.5f;
+
 	int iPortalCount = CProp_Portal_Shared::AllPortals.Count();
 	for ( int i = 0; i < iPortalCount; ++i )
 	{
@@ -79,14 +84,13 @@ void CTriggerPortalCleanser::CleanserThink( void )
 		if ( pPortal == NULL || pPortal->m_bActivated == false )
 			continue;
 
-		const Vector &vecPortalOrigin = pPortal->GetPortalOrigin();
-		if ( IsPointInsideCleanser( vecPortalOrigin ) )
+		if ( pPortal->IsTouchingPortal( vecCenter, vecExtents ) )
 		{
 			pPortal->Fizzle( PORTAL_FIZZLE_FIZZLER );
 		}
 	}
 
-	SetNextThink( gpGlobals->curtime + 0.25f );
+	SetNextThink( gpGlobals->curtime + 0.15f );
 }
 
 //-----------------------------------------------------------------------------
