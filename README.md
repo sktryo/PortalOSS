@@ -109,6 +109,10 @@ buildportal.bat server debug     :: Debug 構成
 buildportal.bat all              :: ソリューション全体
 ```
 
+`buildportal.bat` は実行のたびに VPC (`createportalprojects.bat`) を呼び直すので、
+`.vpc` にファイルを追加した場合も sln/vcxproj が自動で更新されます
+(手動で `createportalprojects.bat` を先に流す必要はありません)。
+
 生成物:
 
 | 生成物 | 場所 |

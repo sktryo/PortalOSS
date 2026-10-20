@@ -33,10 +33,14 @@ set "CONFIG=%ACTION%"
 set "ACTION=build"
 :config_given
 
-if not exist "portal.sln" (
-	echo [buildportal] portal.sln not found, running createportalprojects.bat...
-	call createportalprojects.bat
-	if errorlevel 1 (
+rem Always regenerate the solution: VPC is cheap, and skipping it silently
+rem leaves new .vpc/.cpp files out of the (already existing) project files.
+echo [buildportal] regenerating projects (VPC)...
+call createportalprojects.bat
+if errorlevel 1 (
+	if exist "portal.sln" (
+		echo [buildportal] warning: project generation failed; using the existing portal.sln.
+	) else (
 		echo [buildportal] project generation failed.
 		exit /b 1
 	)
