@@ -1,0 +1,30 @@
+// Portal Device weapon script. Needed because the weapon system requires a
+// script file for every registered weapon (view/world models, HUD data). Must
+// be compatible with the SDK 2013 FileWeaponInfo_t parser.
+//
+// Weapon Data
+WeaponData
+{
+	"printname"		"#Portal_Portalgun"
+	"viewmodel"		"models/weapons/v_portalgun.mdl"
+	"playermodel"	"models/weapons/w_portalgun.mdl"
+	"anim_prefix"	"portalgun"
+
+	"bucket"		"0"
+	"bucket_position"	"0"
+
+	// The portalgun never consumes ammo or reloads; ItemPostFrame drives it directly
+	"clip_size"		"-1"
+	"primary_ammo"	"None"
+	"secondary_ammo"	"None"
+
+	"weight"		"4"
+	"item_flags"	"0"
+	"autoswitchto"	"1"
+
+	SoundData
+	{
+		"single_shot"	"Weapon_Portalgun.fire_blue"
+		"special2"		"Weapon_Portalgun.fire_red"
+	}
+}
