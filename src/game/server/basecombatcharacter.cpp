@@ -578,7 +578,7 @@ CProp_Portal* CBaseCombatCharacter::FInViewConeThroughPortal( const Vector &vecS
 		CProp_Portal *pPortal = pPortals[iPortal];
 
 		// Check if this portal is active, linked, and in the view cone
-		if( pPortal->IsActivedAndLinked() && FInViewCone( pPortal ) )
+		if( pPortal->IsActivatedAndLinked() && FInViewCone( pPortal ) )
 		{
 			// The facing direction is the eye to the portal to set up a proper FOV through the relatively small portal hole
 			Vector facingDir = pPortal->GetAbsOrigin() - ptEyePosition;

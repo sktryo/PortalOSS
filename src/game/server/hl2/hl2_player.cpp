@@ -209,7 +209,7 @@ public:
 	void InputSetLocatorTargetEntity( inputdata_t &inputdata );
 #ifdef PORTAL
 	void InputSuppressCrosshair( inputdata_t &inputdata );
-#endif // PORTAL2
+#endif // PORTAL
 
 	void Activate ( void );
 
@@ -3960,6 +3960,9 @@ void CLogicPlayerProxy::InputSuppressCrosshair( inputdata_t &inputdata )
 		return;
 
 	CPortal_Player *pPlayer = ToPortalPlayer(m_hPlayer.Get());
+	if ( pPlayer == NULL )
+		return;
+
 	pPlayer->SuppressCrosshair( true );
 }
 #endif // PORTAL

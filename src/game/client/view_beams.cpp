@@ -24,6 +24,8 @@
 
 #ifdef PORTAL
 	#include "prop_portal_shared.h"
+	#include "c_prop_portal.h"
+	#include "PortalRender.h"
 #endif
 
 ConVar r_DrawBeams( "r_DrawBeams", "1", FCVAR_CHEAT, "0=Off, 1=Normal, 2=Wireframe" );
@@ -2218,7 +2220,6 @@ void CViewRenderBeams::DrawBeam( C_Beam* pbeam, ITraceFilter *pEntityBeamTraceFi
 			// Draw the sub beam
 			bBeamDrawingThroughPortal = true;
 			DrawBeam( pbeam, pEntityBeamTraceFilter );
-			bBeamDrawingThroughPortal = true;
 
 			// Restore the original values
 			pbeam->SetBrightness( iOldBrightness );

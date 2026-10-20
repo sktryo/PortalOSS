@@ -18,6 +18,12 @@
 #include "mapentities_shared.h"
 #include "debugoverlay_shared.h"
 #include "coordsize.h"
+#ifdef PORTAL
+	#ifdef CLIENT_DLL
+		#include "c_prop_portal.h"
+	#endif
+	#include "portal_util_shared.h"
+#endif
 #include "vphysics/performance.h"
 
 #ifdef CLIENT_DLL
@@ -1722,7 +1728,7 @@ void CBaseEntity::FireBullets( const FireBulletsInfo_t &info )
 		vecEnd = info.m_vecSrc + vecDir * info.m_flDistance;
 
 #ifdef PORTAL
-		CProp_Portal *pShootThroughPortal = NULL;
+		PORTAL_PTR_TYPE *pShootThroughPortal = NULL;
 		float fPortalFraction = 2.0f;
 #endif
 

@@ -1,0 +1,22 @@
+"GameInfo"
+{
+	game		"Portal"
+	title		"Portal"
+	type		singleplayer_only
+	nodifficulty	1
+	hasportals	1
+	FileSystem
+	{
+		SteamAppId				400		// Portal
+		ToolsAppId				211		// tools content (materials\debug, materials\editor, ...)
+
+		//
+		// Search paths are relative to the base directory.
+		//
+		SearchPaths
+		{
+			Game				|gameinfo_path|.
+			Game				|gameinfo_path|../../PortalData	// stock Portal content (materials, models, maps, scripts, sounds)
+		}
+	}
+}

@@ -502,3 +502,24 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Portal mod: stock game content is not part of this repository (Steam AppID 400)
+/PortalData/
+
+# Portal mod: build and run output
+/game/portal/bin/
+/game/portal_linux64
+/game/portal_win64.exe
+/game/portal.exe
+/game/steam_appid.txt
+/game/portal/config.cfg
+/game/portal/cfg/config.cfg
+/game/portal/save/
+/game/portal/screenshots/
+
+# Generated VPC / clangd files
+/src/compile_commands.json
+/src/portal.sln
+/src/portal.vpc_crc
+# Editor swap files
+*.swp

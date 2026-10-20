@@ -1,71 +1,172 @@
-# Source SDK 2013
+# Source SDK 2013 [Portal]
 
-Source code for Source SDK 2013.
+Source SDK 2013 上に **Portal** のゲームコードを再実装したプロジェクトです。
+Valve 公式の Portal ソースコードは使用せず、公開されている Source SDK 2013 と、
+SDK に残されていた `#ifdef PORTAL` のフックを手がかりに実装しています。
 
-Contains the game code for Half-Life 2, HL2: DM and TF2.
+> **状態:** 開発途中です。ポータルの配置・リンク・trace・描画・物理の基本部分は
+> 実装されていますが、Portal 本編のすべての機能を再現したものではありません。
+> 実装済み/未実装の一覧は [docs/status.md](docs/status.md) を参照してください。
 
-**Now including Team Fortress 2! ✨**
+ゲームコンテンツ(マップ、マテリアル、モデル、サウンド)は本リポジトリに含まれません。
+ストック Portal(Steam AppID 400)のインストール先から `PortalData/` として
+用意する必要があります。
 
-## Build instructions
+## 必要要件
 
-Clone the repository using the following command:
+| 用途 | 必要なもの |
+| --- | --- |
+| ビルド (Linux) | x86_64 Linux、podman、Steam Runtime Sniper イメージ |
+| ビルド (Windows) | Windows 10/11 x64、Visual Studio 2022 (C++ デスクトップ開発) |
+| 実行 | Steam、**Source SDK 2013 Multiplayer (AppID 243750)**、**Portal (AppID 400)** |
 
-`git clone https://github.com/ValveSoftware/source-sdk-2013`
+実行時に SDK 2013 Multiplayer が必要なのは、ランチャーがそのインストール先にある
+`hl2.sh` / エンジン本体を起動するためです。Portal (400) はゲームコンテンツ
+(`PortalData/`)の提供元として必要です。片方だけでは起動できません。
 
-### Windows
+## 1. Portal コンテンツの配置
 
-Requirements:
- - Source SDK 2013 Multiplayer installed via Steam
- - Visual Studio 2022 with the following workload and components:
-   - Desktop development with C++:
-     - MSVC v143 - VS 2022 C++ x64/x86 build tools (Latest)
-     - Windows 11 SDK (10.0.22621.0) or Windows 10 SDK (10.0.19041.1)
- - Python 3.13 or later
+Steam で Portal をインストールし、Portal のコンテンツディレクトリを
+リポジトリ直下の `PortalData/` にコピーまたはシンボリックリンクします。
 
-Inside the cloned directory, navigate to `src`, run:
+Linux の例:
+
+```bash
+# Steam のライブラリ位置に合わせてパスを変更してください
+ln -s "$HOME/.steam/steam/steamapps/common/Portal/portal" PortalData
+```
+
+Windows の例 (`PortalData` フォルダを手動作成して中身をコピーする場合):
+
 ```bat
-createallprojects.bat
+xcopy /E /I "C:\Program Files (x86)\Steam\steamapps\common\Portal\portal" "PortalData"
 ```
-This will generate the Visual Studio project `everything.sln` which will be used to build your mod.
 
-Then, on the menu bar, go to `Build > Build Solution`, and wait for everything to build.
+`PortalData/` には少なくとも `maps/`, `materials/`, `models/`, `sound/` が
+含まれます。`PortalData/` は `.gitignore` の対象で、リポジトリにはコミットされません。
 
-You can then select the `Client (Mod Name)` project you wish to run, right click and select `Set as Startup Project` and hit the big green `> Local Windows Debugger` button on the tool bar in order to launch your mod.
+`game/portal/gameinfo.txt` は次の検索パスでコンテンツをマウントします。
 
-The default launch options should be already filled in for the `Release` configuration.
+```text
+Game |gameinfo_path|.
+Game |gameinfo_path|../../PortalData
+```
 
-### Linux
+## 2. ビルド (Linux x86_64)
 
-Requirements:
- - Source SDK 2013 Multiplayer installed via Steam
- - podman
+`src` ディレクトリで:
 
-Inside the cloned directory, navigate to `src`, run:
 ```bash
-./buildallprojects
+cd src
+./buildportal
 ```
 
-This will build all the projects related to the SDK and your mods automatically against the Steam Runtime.
+`buildportal` は次の処理を行います。
 
-You can then, in the root of the cloned directory, you can navigate to `game` and run your mod by launching the build launcher for your mod project, eg:
+1. `sdk_container` 経由で Steam Runtime Sniper のコンテナを起動
+2. `vpc /portal /linux64 /ninja /define:SOURCESDK +everything` で ninja ファイルを生成
+3. `ninja` でビルド
+
+デバッグ構成は `./buildportal debug` です。
+
+生成物:
+
+| 生成物 | 場所 |
+| --- | --- |
+| client / server DLL | `game/portal/bin/linux64/` |
+| ランチャー | `game/portal_linux64` |
+| `compile_commands.json` | `src/compile_commands.json` |
+
+> ビルドは x86_64 環境が前提です。aarch64 上では同梱の `devtools/bin/vpc` が
+> 実行できないため、x86_64 のコンテナ/マシン上でビルドしてください。
+
+## 3. ビルド (Windows x64)
+
+`src` ディレクトリで `createportalprojects.bat` を実行します
+(エクスプローラーからダブルクリックしても構いません)。
+
+```bat
+cd src
+createportalprojects.bat
+```
+
+`src\portal.sln` が生成されるので、Visual Studio で開いて
+**Build > Build Solution** を実行します。
+
+生成物:
+
+| 生成物 | 場所 |
+| --- | --- |
+| client / server DLL | `game\portal\bin\x64\` |
+| ランチャー | `game\portal_win64.exe` (32bit 構成では `game\portal.exe`) |
+
+## 4. 起動
+
+Steam を起動し、SDK 2013 Multiplayer (243750) と Portal (400) の両方が
+インストールされていることを確認してから、リポジトリの `game` ディレクトリで
+ランチャーを実行します。
+
 ```bash
-./mod_tf
+cd game
+./portal_linux64
 ```
 
-*Mods that are distributed on Steam MUST be built against the Steam Runtime, which the above steps will automatically do for you.*
+Windows:
 
-## Distributing your Mod
+```bat
+cd game
+portal_win64.exe
+```
 
-There is guidance on distributing your mod both on and off Steam available at the following link:
+ランチャーは実行ファイル名から mod 名 (`portal`) を解決し、
+`-game <リポジトリ>/game/portal` を付けて SDK 2013 Multiplayer の
+エンジンを起動します。引数を明示する場合は次のようにも実行できます。
 
-https://partner.steamgames.com/doc/sdk/uploading/distributing_source_engine
+```bash
+game/portal_linux64 -game "$(pwd)/game/portal"
+```
 
-## Additional Resources
+ゲーム内コンソールで `map testchmb_a_00` などを実行するとテストマップを
+ロードできます。
 
-- [Valve Developer Wiki](https://developer.valvesoftware.com/wiki/Source_SDK_2013)
+## 実装状況
 
-## License
+主な実装:
 
-The SDK is licensed to users on a non-commercial basis under the [SOURCE 1 SDK LICENSE](LICENSE), which is contained in the [LICENSE](LICENSE) file in the root of the repository.
+- ポータルガンによる青/オレンジのポータル配置と、2 門のリンク
+- コーナー座標からポータル平面・変換行列を構築する共有ジオメトリ
+- ポータルを貫通するレイトレース(弾丸、ビーム、汎用 trace / エンティティ trace)
+- vphysics プロップのポータル通過時のテレポート
+- ステンシル方式のポータル越し描画(再帰ビュー、最大 4 段)
+- `_rt_Portal1` / `_rt_Portal2` へのオプション レンダーターゲット描画
+- `prop_weighted_cube`, `prop_floor_button`, `trigger_portal_cleanser`
+- クライアントへのポータル状態(コーナー、リンク、種類)のネットワーク同期
 
-For more information, see [Distributing your Mod](#markdown-header-distributing-your-mod).
+主な未実装・簡易実装:
+
+- プレイヤーのポータル通過(位置・速度・視点角のいずれも未実装。
+  以前の部分実装は壁抜けの懸念から削除済み)
+- ポータルを設置できる表面の制限(現在はワールドの任意の面に設置可能)
+- `linked_portal_door`, `prop_portal_spawner`, `func_portal_orientation`,
+  `env_portal_pathtrack`, `npc_security_camera` など
+- Portal 本編の HUD、実績、チャレンジモード
+- NPC のポータル経由ナビゲーション
+- ポータル越しの完全な物理シミュレーション(現在はプロップのテレポート方式)
+
+詳細は [docs/status.md](docs/status.md)、設計は
+[docs/architecture.md](docs/architecture.md) を参照してください。
+
+## ドキュメント
+
+| ファイル | 内容 |
+| --- | --- |
+| [README.md](README.md) | セットアップ、ビルド、起動 |
+| [docs/architecture.md](docs/architecture.md) | コード構成と処理の流れ |
+| [docs/status.md](docs/status.md) | 実装状況、既知の制限、確認状況 |
+| [README-src.md](README-src.md) | 上流 Source SDK 2013 の README (参照用) |
+
+## ライセンス
+
+元の Source SDK 部分は [SOURCE 1 SDK LICENSE](LICENSE) の下、非商用目的で
+ユーザーにライセンスされています。再実装した Portal コードも同ライセンスに
+従います。詳細は [LICENSE](LICENSE) を参照してください。
