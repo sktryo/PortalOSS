@@ -1,0 +1,106 @@
+// Portal (SDK 2013 reimplementation) — minimal self-contained FGD.
+//
+// Lists the entity classes this mod implements plus the basics needed to use
+// them. Entities not listed here (NPCs, choreographed effects, ...) are not
+// implemented and will be dropped by the game with "unknown class" warnings
+// when maps contain them.
+//
+// For the full stock Portal entity list, use Portal's own FGD from the
+// Source SDK tools; missing classes simply do not spawn in game.
+
+
+@BaseClass base(Targetname, Parentname) = BaseDynamicProp
+[
+	model(studio) : "Model" : ""
+	skin(integer) : "Skin" : 0
+	solid(integer) : "Solid" : 0
+	disableshadows(boolean) : "Disable shadows" : 0
+]
+
+@BaseClass = Angles
+[
+	angles(angles) : "Pitch Yaw Roll (Y Z X)" : "0 0 0"
+]
+
+
+// ---------------------------------------------------------------------------
+// World / spawnpoints
+// ---------------------------------------------------------------------------
+@SolidClass = worldspawn : "World entity"
+[
+	mapversion(integer) : "Map version" : 1
+	skyname(string) : "Skybox texture name" : "sky_day01_01"
+	startdark(boolean) : "Start Dark" : 0
+	output OnMapSpawn(void) : "Fired when the map spawns"
+]
+
+@PointClass size(-16 -16 0, 16 16 72) color(255 0 255) = info_player_start : "Player spawn point"
+[
+]
+
+@PointClass size(-16 -16 0, 16 16 72) color(255 0 255) = info_player_deathmatch : "Player spawn point (used by Portal maps)"
+[
+]
+
+
+// ---------------------------------------------------------------------------
+// Implemented Portal entities
+// ---------------------------------------------------------------------------
+@PointClass base(Targetname, Parentname, Angles) size(-24 -24 -48, 24 24 48) color(0 100 255) =
+	prop_portal_spawner : "Wall mounted portal emitter (approximately implemented). SpawnPortal input places a portal on the surface it faces"
+[
+	model(studio) : "Model" : "models/props/portal_emitter.mdl"
+	spawn_blue(boolean) : "Spawn blue portal" : 1 : "Blue when checked, orange when unchecked"
+	input SpawnPortal(void) : "Place a portal on the nearest surface along the emitter's forward axis"
+	input SpawnPortalWithoutDoor(void) : "Same as SpawnPortal (door linkage is not implemented)"
+	input SetPortalType(integer) : "Set the portal color: 0 = blue, 1 = orange"
+	input ClosePortal(void) : "Fizzle the portal this emitter spawned"
+	output OnPreSpawnedPortal(void) : "Fired just before a portal is placed"
+	output OnPostSpawnedPortal(void) : "Fired after a portal was placed successfully"
+]
+
+@PointClass base(Targetname, Parentname, Angles) size(-24 -24 -4, 24 24 4) color(0 100 255) =
+	linked_portal_door : "Sliding door that carries a portal. When fully open the portal on its resting plane becomes active (approximately implemented)"
+[
+	model(studio) : "Model" : "models/props/portal_door.mdl"
+	portal_type(integer) : "Portal type" : 0 : "0 = blue, 1 = orange"
+	input Open(void) : "Slide the door down; the portal becomes active when fully open"
+	input Close(void) : "Slide the door back; the portal fizzles as soon as it starts closing"
+	input Toggle(void) : "Toggle the open state"
+	output OnFullyOpen(void) : "Fired when the door finished opening and its portal is active"
+	output OnFullyClosed(void) : "Fired when the door finished closing"
+]
+
+@PointClass base(Targetname, Parentname, Angles) size(-24 -24 0, 24 24 48) color(255 160 0) =
+	prop_button : "Pedestal push button. Press with +USE while close to it and looking at it"
+[
+	model(studio) : "Model" : "models/props/button_base.mdl"
+	output OnPressed(void) : "Fired when a player starts pressing the button"
+	output OnUnpressed(void) : "Fired when the player stops pressing"
+]
+
+@PointClass base(Targetname, Parentname, Angles) size(-24 -24 0, 24 24 24) color(255 160 0) =
+	prop_floor_button : "Floor mounted pressure button (approximately implemented). Powered while a player or weighted cube rests on it"
+[
+	model(studio) : "Model" : "models/props/button_base_reference.mdl"
+	output OnPowered(void) : "Fired when a player or cube starts resting on the button"
+	output OnUnpowered(void) : "Fired when it stops"
+]
+
+@PointClass base(Targetname, Parentname, Angles) studio("models/props/metal_box.mdl") size(-16 -16 0, 16 16 24) color(255 255 255) =
+	prop_weighted_cube : "Weighted companion cube"
+[
+]
+
+@SolidClass base(Targetname) color(255 0 0) =
+	trigger_portal_cleanser : "Fizzles portals overlapping the brush and dissolves cubes that touch it"
+[
+]
+
+// ---------------------------------------------------------------------------
+// Weapons (the gun is given to players at spawn; for pickup entity authors)
+// ---------------------------------------------------------------------------
+@PointClass base(Targetname, Parentname, Angles) studio("models/weapons/w_portalgun.mdl") size(-16 -16 0, 16 16 24) color(153 0 153) =
+	weapon_portalgun : "Portal Device"
+[
+]
