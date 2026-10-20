@@ -53,6 +53,14 @@ ConVar portal_debug_stencil_clear( "portal_debug_stencil_clear", "0", FCVAR_CHEA
 ConVar portal_debug_screen_quad( "portal_debug_screen_quad", "0", FCVAR_CHEAT,
 	"Draw the portal opening material as a screen-space rectangle." );
 
+// Selects how the opening quad is submitted to the material system:
+//  0 - unbuffered dynamic mesh, End(true,true)
+//  1 - buffered dynamic mesh, End(true,true)
+//  2 - unbuffered dynamic mesh, End() + IMesh::Draw()
+//  3 - buffered dynamic mesh, End() + IMesh::Draw()
+ConVar portal_debug_mesh_mode( "portal_debug_mesh_mode", "0", FCVAR_CHEAT,
+	"Select the dynamic mesh submission path for the portal opening." );
+
 //-----------------------------------------------------------------------------
 CPortalRender *g_pPortalRender = NULL;
 
@@ -293,10 +301,11 @@ static IMaterial *GetPortalSurfaceMaterial( void )
 	if ( !s_bLogged )
 	{
 		s_bLogged = true;
-		Portal_DebugLog( "[portal] surface material: '%s' stencil_buffer=%d stencil_bits=%d",
+		Portal_DebugLog( "[portal] surface material: '%s' stencil_buffer=%d stencil_bits=%d vertex_format=0x%x",
 			( s_pMaterial != NULL ) ? s_pMaterial->GetName() : "(null)",
 			g_pMaterialSystemHardwareConfig->HasStencilBuffer() ? 1 : 0,
-			g_pMaterialSystemHardwareConfig->StencilBufferBits() );
+			g_pMaterialSystemHardwareConfig->StencilBufferBits(),
+			( s_pMaterial != NULL ) ? s_pMaterial->GetVertexFormat() : 0 );
 	}
 
 	return s_pMaterial;
@@ -330,7 +339,16 @@ void CPortalRender::DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32
 	vecQuad[3] = vTL + vecNudge;
 
 	CMeshBuilder meshBuilder;
-	IMesh *pMesh = pRenderContext->GetDynamicMesh( false, NULL, NULL, pMaterial );
+	IMesh *pMesh = NULL;
+	int iMode = portal_debug_mesh_mode.GetInt();
+	if ( iMode & 1 )
+		pMesh = pRenderContext->GetDynamicMesh( true, NULL, NULL, pMaterial );
+	else
+		pMesh = pRenderContext->GetDynamicMesh( false, NULL, NULL, pMaterial );
+
+	if ( pMesh == NULL )
+		return;
+
 	meshBuilder.Begin( pMesh, MATERIAL_QUADS, 1 );
 	for ( int i = 0; i < 4; ++i )
 	{
@@ -339,7 +357,16 @@ void CPortalRender::DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32
 		meshBuilder.TexCoord2f( 0, 0.0f, 0.0f );
 		meshBuilder.AdvanceVertex();
 	}
-	meshBuilder.End( true, true );
+
+	if ( iMode & 2 )
+	{
+		meshBuilder.End();
+		pMesh->Draw();
+	}
+	else
+	{
+		meshBuilder.End( true, true );
+	}
 }
 
 //-----------------------------------------------------------------------------
