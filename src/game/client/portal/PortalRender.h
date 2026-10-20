@@ -83,6 +83,7 @@ public:
 
 private:
 	void				BuildPortalView( C_Prop_Portal *pEnterPortal, CViewRender *pMainView, CViewSetup &portalView );
+	void				DrawWorldQuad( const Vector *pQuad, const color32 &color );
 	void				DrawPortalStencilQuad( C_Prop_Portal *pPortal );
 	void				DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32 &color );
 	void				DrawDormantPortalSurface( C_Prop_Portal *pPortal );

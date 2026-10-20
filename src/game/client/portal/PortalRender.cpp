@@ -58,8 +58,14 @@ ConVar portal_debug_screen_quad( "portal_debug_screen_quad", "0", FCVAR_CHEAT,
 //  1 - buffered dynamic mesh, End(true,true)
 //  2 - unbuffered dynamic mesh, End() + IMesh::Draw()
 //  3 - buffered dynamic mesh, End() + IMesh::Draw()
-ConVar portal_debug_mesh_mode( "portal_debug_mesh_mode", "0", FCVAR_CHEAT,
+//  4 - no auto-bind mesh, End() + IMesh::Draw() (verified beam/sprite path)
+ConVar portal_debug_mesh_mode( "portal_debug_mesh_mode", "4", FCVAR_CHEAT,
 	"Select the dynamic mesh submission path for the portal opening." );
+
+// When 1, forces the opening material to ignore the depth test
+// (MATERIAL_VAR_IGNOREZ) to rule out depth-occlusion of the opening quad.
+ConVar portal_debug_ignorez( "portal_debug_ignorez", "0", FCVAR_CHEAT,
+	"Force the portal opening quad to ignore the depth test." );
 
 //-----------------------------------------------------------------------------
 CPortalRender *g_pPortalRender = NULL;
@@ -311,7 +317,7 @@ static IMaterial *GetPortalSurfaceMaterial( void )
 	return s_pMaterial;
 }
 
-void CPortalRender::DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32 &color )
+void CPortalRender::DrawWorldQuad( const Vector *pQuad, const color32 &color )
 {
 	CMatRenderContextPtr pRenderContext( materials );
 
@@ -319,8 +325,52 @@ void CPortalRender::DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32
 	if ( pMaterial == NULL )
 		return;
 
+	// Bind first so the dynamic mesh adopts the material's vertex format. This
+	// mirrors the proven world-space quad path in beamdraw.cpp / DrawSprite,
+	// which calls GetDynamicMesh() with no arguments after binding.
 	pRenderContext->Bind( pMaterial );
 
+	// When requested, make the quad ignore the depth test so it draws over the
+	// wall; rules out depth-z-fighting as the cause of an invisible opening.
+	pMaterial->SetMaterialVarFlag( MATERIAL_VAR_IGNOREZ, portal_debug_ignorez.GetBool() );
+
+	IMesh *pMesh = NULL;
+	int iMode = portal_debug_mesh_mode.GetInt();
+	if ( ( iMode & 4 ) != 0 )
+		// engine'd world-space quad path (beam/sprite style): no auto-bind,
+		// explicit End() + Draw()
+		pMesh = pRenderContext->GetDynamicMesh( );
+	else if ( iMode & 1 )
+		pMesh = pRenderContext->GetDynamicMesh( true, NULL, NULL, pMaterial );
+	else
+		pMesh = pRenderContext->GetDynamicMesh( false, NULL, NULL, pMaterial );
+
+	if ( pMesh == NULL )
+		return;
+
+	CMeshBuilder meshBuilder;
+	meshBuilder.Begin( pMesh, MATERIAL_QUADS, 1 );
+	for ( int i = 0; i < 4; ++i )
+	{
+		meshBuilder.Position3fv( pQuad[i].Base() );
+		meshBuilder.Color4ub( color.r, color.g, color.b, color.a );
+		meshBuilder.TexCoord2f( 0, 0.0f, 0.0f );
+		meshBuilder.AdvanceVertex();
+	}
+
+	if ( ( iMode & 4 ) != 0 || ( iMode & 2 ) != 0 )
+	{
+		meshBuilder.End();
+		pMesh->Draw();
+	}
+	else
+	{
+		meshBuilder.End( true, true );
+	}
+}
+
+void CPortalRender::DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32 &color )
+{
 	//nudge the quad off the wall toward the camera to avoid z-fighting with the wall
 	Vector vecNudge = pPortal->m_plane_Origin.normal;
 	if ( DotProduct( CurrentViewOrigin() - pPortal->GetPortalOrigin(), vecNudge ) < 0.0f )
@@ -338,35 +388,7 @@ void CPortalRender::DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32
 	vecQuad[2] = vTR + vecNudge;
 	vecQuad[3] = vTL + vecNudge;
 
-	CMeshBuilder meshBuilder;
-	IMesh *pMesh = NULL;
-	int iMode = portal_debug_mesh_mode.GetInt();
-	if ( iMode & 1 )
-		pMesh = pRenderContext->GetDynamicMesh( true, NULL, NULL, pMaterial );
-	else
-		pMesh = pRenderContext->GetDynamicMesh( false, NULL, NULL, pMaterial );
-
-	if ( pMesh == NULL )
-		return;
-
-	meshBuilder.Begin( pMesh, MATERIAL_QUADS, 1 );
-	for ( int i = 0; i < 4; ++i )
-	{
-		meshBuilder.Position3fv( vecQuad[i].Base() );
-		meshBuilder.Color4ub( color.r, color.g, color.b, color.a );
-		meshBuilder.TexCoord2f( 0, 0.0f, 0.0f );
-		meshBuilder.AdvanceVertex();
-	}
-
-	if ( iMode & 2 )
-	{
-		meshBuilder.End();
-		pMesh->Draw();
-	}
-	else
-	{
-		meshBuilder.End( true, true );
-	}
+	DrawWorldQuad( vecQuad, color );
 }
 
 //-----------------------------------------------------------------------------
