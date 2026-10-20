@@ -311,12 +311,10 @@ int CRecordingList::Count()
 // Should these be somewhere else?
 #define PITCH 0
 
-// PORTAL: The VPC files compile with fopen=dont_use_fopen, so undo that
-// locally; this is a plain diagnostic log, not engine file I/O.
-#include <stdio.h>
-#ifdef fopen
-#undef fopen
-#endif
+// PORTAL: The VPC files compile with fopen=dont_use_fopen, and cbase.h pulls
+// in <stdio.h> while that macro is active, so the CRT only ever declares a
+// function named dont_use_fopen. Use the STL stream instead of stdio here.
+#include <fstream>
 
 //-----------------------------------------------------------------------------
 // Purpose: Decodes animtime and notes when it changes
@@ -336,11 +334,11 @@ static void PortalLogBadRecvAnimTime( const char *pszWhere, const CRecvProxyData
 
 	Msg( "RecvProxy_AnimTime: %s, pStruct %p (prop '%s')\n", pszWhere, pStruct, pszProp );
 
-	FILE *pFile = fopen( "portal_animtime.log", "a" );
-	if ( pFile != NULL )
+	std::ofstream log( "portal_animtime.log", std::ios::app );
+	if ( log.is_open() )
 	{
-		fprintf( pFile, "RecvProxy_AnimTime: %s, pStruct %p (prop '%s')\n", pszWhere, pStruct, pszProp );
-		fclose( pFile );
+		log << "RecvProxy_AnimTime: " << pszWhere << ", pStruct " << pStruct
+			<< " (prop '" << pszProp << "')\n";
 	}
 }
 

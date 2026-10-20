@@ -105,12 +105,10 @@ ConVar sv_netvisdist( "sv_netvisdist", "10000", FCVAR_CHEAT | FCVAR_DEVELOPMENTO
 
 ConVar sv_script_think_interval("sv_script_think_interval", "0.1");
 
-// PORTAL: The VPC files compile with fopen=dont_use_fopen, so undo that
-// locally; this is a plain diagnostic log, not engine file I/O.
-#include <stdio.h>
-#ifdef fopen
-#undef fopen
-#endif
+// PORTAL: The VPC files compile with fopen=dont_use_fopen, and cbase.h pulls
+// in <stdio.h> while that macro is active, so the CRT only ever declares a
+// function named dont_use_fopen. Use the STL stream instead of stdio here.
+#include <fstream>
 
 // This table encodes edict data.
 // PORTAL: The engine hands us the entity being packed. When a corrupted
@@ -128,11 +126,11 @@ static void PortalLogBadAnimTime( const char *pszWhere, const void *pStruct, int
 
 	Msg( "SendProxy_AnimTime: %s, pStruct %p (objectID %d, class '%s')\n", pszWhere, pStruct, objectID, pszClass );
 
-	FILE *pFile = fopen( "portal_animtime.log", "a" );
-	if ( pFile != NULL )
+	std::ofstream log( "portal_animtime.log", std::ios::app );
+	if ( log.is_open() )
 	{
-		fprintf( pFile, "SendProxy_AnimTime: %s, pStruct %p (objectID %d, class '%s')\n", pszWhere, pStruct, objectID, pszClass );
-		fclose( pFile );
+		log << "SendProxy_AnimTime: " << pszWhere << ", pStruct " << pStruct
+			<< " (objectID " << objectID << ", class '" << pszClass << "')\n";
 	}
 }
 
