@@ -101,14 +101,15 @@ ConVar sv_netvisdist( "sv_netvisdist", "10000", FCVAR_CHEAT | FCVAR_DEVELOPMENTO
 ConVar sv_script_think_interval("sv_script_think_interval", "0.1");
 
 // This table encodes edict data.
-void SendProxy_AnimTime( const SendProp *pProp, const void *pStruct, const void *pVarData, DVariant *pOut, int iElement, int objectID )
+// PORTAL: The engine hands us the entity being packed. When a corrupted
+// edict reaches this proxy it faults in the struct/body deref, which kills
+// the whole snapshot. Split the body so it can be wrapped in SEH and logged.
+static void SendProxy_AnimTimeInternal( const SendProp *pProp, const void *pStruct, const void *pVarData, DVariant *pOut, int iElement, int objectID )
 {
 	CBaseEntity *pEntity = (CBaseEntity *)pStruct;
 
-	// PORTAL: Trap clearly invalid struct pointers handed to the packer. The
-	// engine normally guarantees a valid entity here, but a corrupted edict
-	// reaches this proxy as 0xFF..FF during map load. Log the offending edict
-	// (index/class) and encode a harmless value so the snapshot can complete.
+	// Cheap fast-path trap for clearly bogus pointers (0, -1, kernel range).
+	// Everything else is caught by the SEH wrapper below.
 	if ( ( (uintptr_t)pStruct >= 0xFFF0000000000000ULL ) || ( (uintptr_t)pStruct < 0x1000ULL ) )
 	{
 		edict_t *pEdict = engine->PEntityOfEntIndex( objectID );
@@ -141,6 +142,27 @@ void SendProxy_AnimTime( const SendProp *pProp, const void *pStruct, const void 
 	}
 
 	pOut->m_Int = addt;
+}
+
+void SendProxy_AnimTime( const SendProp *pProp, const void *pStruct, const void *pVarData, DVariant *pOut, int iElement, int objectID )
+{
+#if defined( _WIN32 )
+	__try
+	{
+		SendProxy_AnimTimeInternal( pProp, pStruct, pVarData, pOut, iElement, objectID );
+	}
+	__except( EXCEPTION_EXECUTE_HANDLER )
+	{
+		edict_t *pEdict = engine->PEntityOfEntIndex( objectID );
+		const char *pszClass = "???";
+		if ( pEdict != NULL && pEdict->GetClassName() != NULL )
+			pszClass = pEdict->GetClassName();
+		Msg( "SendProxy_AnimTime: access violation, pStruct %p (objectID %d, class '%s')\n", pStruct, objectID, pszClass );
+		pOut->m_Int = 0;
+	}
+#else
+	SendProxy_AnimTimeInternal( pProp, pStruct, pVarData, pOut, iElement, objectID );
+#endif
 }
 
 // This table encodes edict data.
