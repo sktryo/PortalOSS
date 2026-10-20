@@ -109,6 +109,26 @@ ConVar sv_script_think_interval("sv_script_think_interval", "0.1");
 // PORTAL: The engine hands us the entity being packed. When a corrupted
 // edict reaches this proxy it faults in the struct/body deref, which kills
 // the whole snapshot. Split the body so it can be wrapped in SEH and logged.
+//
+// -condebug does not work in this mod, so also append the message to a plain
+// file next to the launcher (the engine's write path for the MOD is broken).
+static void PortalLogBadAnimTime( const char *pszWhere, const void *pStruct, int objectID )
+{
+	edict_t *pEdict = engine->PEntityOfEntIndex( objectID );
+	const char *pszClass = "???";
+	if ( pEdict != NULL && pEdict->GetClassName() != NULL )
+		pszClass = pEdict->GetClassName();
+
+	Msg( "SendProxy_AnimTime: %s, pStruct %p (objectID %d, class '%s')\n", pszWhere, pStruct, objectID, pszClass );
+
+	FILE *pFile = fopen( "portal_animtime.log", "a" );
+	if ( pFile != NULL )
+	{
+		fprintf( pFile, "SendProxy_AnimTime: %s, pStruct %p (objectID %d, class '%s')\n", pszWhere, pStruct, objectID, pszClass );
+		fclose( pFile );
+	}
+}
+
 static void SendProxy_AnimTimeInternal( const SendProp *pProp, const void *pStruct, const void *pVarData, DVariant *pOut, int iElement, int objectID )
 {
 	CBaseEntity *pEntity = (CBaseEntity *)pStruct;
@@ -117,11 +137,7 @@ static void SendProxy_AnimTimeInternal( const SendProp *pProp, const void *pStru
 	// Everything else is caught by the SEH wrapper below.
 	if ( ( (uintptr_t)pStruct >= 0xFFF0000000000000ULL ) || ( (uintptr_t)pStruct < 0x1000ULL ) )
 	{
-		edict_t *pEdict = engine->PEntityOfEntIndex( objectID );
-		const char *pszClass = "???";
-		if ( pEdict != NULL && pEdict->GetClassName() != NULL )
-			pszClass = pEdict->GetClassName();
-		Msg( "SendProxy_AnimTime: invalid pStruct %p (objectID %d, class '%s')\n", pStruct, objectID, pszClass );
+		PortalLogBadAnimTime( "invalid pStruct", pStruct, objectID );
 		pOut->m_Int = 0;
 		return;
 	}
@@ -158,11 +174,7 @@ void SendProxy_AnimTime( const SendProp *pProp, const void *pStruct, const void 
 	}
 	__except( EXCEPTION_EXECUTE_HANDLER )
 	{
-		edict_t *pEdict = engine->PEntityOfEntIndex( objectID );
-		const char *pszClass = "???";
-		if ( pEdict != NULL && pEdict->GetClassName() != NULL )
-			pszClass = pEdict->GetClassName();
-		Msg( "SendProxy_AnimTime: access violation, pStruct %p (objectID %d, class '%s')\n", pStruct, objectID, pszClass );
+		PortalLogBadAnimTime( "access violation", pStruct, objectID );
 		pOut->m_Int = 0;
 	}
 #else

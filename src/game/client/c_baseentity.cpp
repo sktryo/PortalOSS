@@ -322,6 +322,21 @@ int CRecordingList::Count()
 // entity reaches this proxy as 0xFF..FF (or otherwise garbage) and faults in
 // entindex(); log the property source and skip the update instead of killing
 // the client during the first snapshot.
+// -condebug does not work in this mod, so also append to a plain file.
+static void PortalLogBadRecvAnimTime( const char *pszWhere, const CRecvProxyData *pData, void *pStruct )
+{
+	const char *pszProp = ( pData != NULL && pData->m_pRecvProp != NULL ) ? pData->m_pRecvProp->GetName() : "?";
+
+	Msg( "RecvProxy_AnimTime: %s, pStruct %p (prop '%s')\n", pszWhere, pStruct, pszProp );
+
+	FILE *pFile = fopen( "portal_animtime.log", "a" );
+	if ( pFile != NULL )
+	{
+		fprintf( pFile, "RecvProxy_AnimTime: %s, pStruct %p (prop '%s')\n", pszWhere, pStruct, pszProp );
+		fclose( pFile );
+	}
+}
+
 static void RecvProxy_AnimTimeInternal( const CRecvProxyData *pData, void *pStruct, void *pOut )
 {
 	C_BaseEntity *pEntity = ( C_BaseEntity * )pStruct;
@@ -330,8 +345,7 @@ static void RecvProxy_AnimTimeInternal( const CRecvProxyData *pData, void *pStru
 	// Cheap trap for clearly bogus pointers; the SEH wrapper catches the rest.
 	if ( ( (uintptr_t)pStruct >= 0xFFF0000000000000ULL ) || ( (uintptr_t)pStruct < 0x1000ULL ) )
 	{
-		const char *pszProp = ( pData != NULL && pData->m_pRecvProp != NULL ) ? pData->m_pRecvProp->GetName() : "?";
-		Msg( "RecvProxy_AnimTime: invalid pStruct %p (prop '%s')\n", pStruct, pszProp );
+		PortalLogBadRecvAnimTime( "invalid pStruct", pData, pStruct );
 		return;
 	}
 
@@ -367,8 +381,7 @@ void RecvProxy_AnimTime( const CRecvProxyData *pData, void *pStruct, void *pOut 
 	}
 	__except( EXCEPTION_EXECUTE_HANDLER )
 	{
-		const char *pszProp = ( pData != NULL && pData->m_pRecvProp != NULL ) ? pData->m_pRecvProp->GetName() : "?";
-		Msg( "RecvProxy_AnimTime: access violation, pStruct %p (prop '%s')\n", pStruct, pszProp );
+		PortalLogBadRecvAnimTime( "access violation", pData, pStruct );
 	}
 #else
 	RecvProxy_AnimTimeInternal( pData, pStruct, pOut );

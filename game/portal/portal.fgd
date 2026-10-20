@@ -159,6 +159,15 @@
 ]
 
 // ---------------------------------------------------------------------------
+// Props / NPCs
+// ---------------------------------------------------------------------------
+@PointClass base(Targetname, Angles) studio("models/props/security_camera.mdl") size(-8 -8 -8, 8 8 8) color(255 128 0) =
+	npc_security_camera : "Security camera. Visual only in this build (does not track the player yet)"
+[
+	model(studio) : "World model"
+]
+
+// ---------------------------------------------------------------------------
 // Weapons (the gun is given to players at spawn; for pickup entity authors)
 // ---------------------------------------------------------------------------
 @PointClass base(Targetname, Parentname, Angles) studio("models/weapons/w_portalgun.mdl") size(-16 -16 0, 16 16 24) color(153 0 153) =

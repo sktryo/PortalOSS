@@ -78,6 +78,7 @@ $Project "Server (Portal)"
 			$File	"portal\trigger_portal_cleanser.cpp"
 			$File	"portal\func_portal_volumes.cpp"
 			$File	"portal\func_portal_volumes.h"
+			$File	"portal\npc_security_camera.cpp"
 			$File	"portal\weapon_portalgun.cpp"
 			$File	"portal\weapon_portalgun.h"
 		}
