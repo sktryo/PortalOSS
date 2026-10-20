@@ -148,6 +148,7 @@ private:
 	CNetworkVar( int, m_iPortalType );
 	string_t				m_strLinkedPortalName;
 	int						m_iLinkageGroupID;		// "LinkageGroupID" (single-player always 0)
+	int						m_iPortalTypeAlias;		// "PortalType" fallback for older maps
 	bool					m_bStartActivated;		// "Activated" keyvalue
 	COutputEvent			m_OnPlacedSuccessfully;
 };

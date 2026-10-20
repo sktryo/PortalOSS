@@ -22,8 +22,9 @@
 LINK_ENTITY_TO_CLASS( prop_portal, CProp_Portal );
 
 BEGIN_DATADESC( CProp_Portal )
-	DEFINE_FIELD( m_strLinkedPortalName, FIELD_STRING ),
+	DEFINE_KEYFIELD( m_strLinkedPortalName, FIELD_STRING, "LinkedPortal" ),
 	DEFINE_KEYFIELD( m_iPortalType, FIELD_INTEGER, "PortalTwo" ),
+	DEFINE_KEYFIELD( m_iPortalTypeAlias, FIELD_INTEGER, "PortalType" ),
 	DEFINE_KEYFIELD( m_iLinkageGroupID, FIELD_INTEGER, "LinkageGroupID" ),
 	DEFINE_KEYFIELD( m_bStartActivated, FIELD_BOOLEAN, "Activated" ),
 	DEFINE_INPUTFUNC( FIELD_BOOLEAN, "SetActivatedState", InputSetActivatedState ),
@@ -44,6 +45,7 @@ CProp_Portal::CProp_Portal( void )
 {
 	SetPortalType( PORTAL_TYPE_NONE );
 	m_strLinkedPortalName = NULL_STRING;
+	m_iPortalTypeAlias = PORTAL_TYPE_NONE;
 	m_iLinkageGroupID = 0;
 	m_bStartActivated = false;
 }
@@ -76,6 +78,14 @@ void CProp_Portal::Spawn( void )
 void CProp_Portal::Activate( void )
 {
 	BaseClass::Activate();
+
+	// Older Portal maps may carry the colour as "PortalType" instead of
+	// "PortalTwo". Resolve it once when the primary key was absent.
+	if ( GetPortalType() == PORTAL_TYPE_NONE &&
+		 ( m_iPortalTypeAlias == PORTAL_TYPE_BLUE || m_iPortalTypeAlias == PORTAL_TYPE_ORANGE ) )
+	{
+		SetPortalType( ( PortalType )m_iPortalTypeAlias );
+	}
 
 	Portal_DebugLog( "[portal] prop_portal Activate: origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f) type=%d corners_valid=%d start_active=%d linkedname='%s'",
 		GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z,
