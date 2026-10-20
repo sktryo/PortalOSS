@@ -1,0 +1,12 @@
+// Portal opening placeholder surface. Used when the engine's
+// debug/debugvertexcolor material is not available (this mod only mounts the
+// SDK 2013 platform content and Portal's game content, not HL2's).
+// Vertex colours carry the portal tint, so one material serves both colours.
+"UnlitGeneric"
+{
+	"$basetexture"	"console/background1"
+	"$vertexcolor"	"1"
+	"$vertexalpha"	"1"
+	"$translucent"	"1"
+	"$nocull"		"1"
+}

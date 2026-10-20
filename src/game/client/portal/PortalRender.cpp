@@ -21,6 +21,7 @@
 #include "materialsystem/imesh.h"
 #include "c_baseplayer.h"
 #include "KeyValues.h"
+#include "engine/ivdebugoverlay.h"
 #include "tier0/vprof.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
@@ -32,6 +33,12 @@
 
 ConVar portal_render_targets_enabled( "portal_render_targets_enabled", "0", FCVAR_CHEAT,
 	"Enable rendering of through-portal views to the _rt_Portal1/_rt_Portal2 render targets." );
+
+// Temporary visual aid: draws the opening's outline and normal with the debug
+// overlay so the geometry can be verified even if the portal surfaces do not
+// rasterise yet.
+ConVar portal_debug_outline( "portal_debug_outline", "1", FCVAR_CHEAT,
+	"Draw portal opening outlines with the debug overlay." );
 
 //-----------------------------------------------------------------------------
 CPortalRender *g_pPortalRender = NULL;
@@ -231,14 +238,55 @@ void CPortalRender::HandlePortalPlaybackMessage( KeyValues *pKeyValues )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: material used to fill portal openings. The engine/HL2 content
+//			provides debug/debugvertexcolor, but this mod only mounts the SDK
+//			platform + Portal content, so fall back to a material we ship.
+//-----------------------------------------------------------------------------
+static IMaterial *GetPortalSurfaceMaterial( void )
+{
+	static IMaterial *s_pMaterial = NULL;
+	static bool s_bResolved = false;
+	static bool s_bLogged = false;
+
+	if ( !s_bResolved )
+	{
+		s_bResolved = true;
+
+		IMaterial *pDebug = materials->FindMaterial( "debug/debugvertexcolor", TEXTURE_GROUP_OTHER, false );
+		if ( pDebug != NULL && !pDebug->IsErrorMaterial() )
+		{
+			s_pMaterial = pDebug;
+		}
+		else
+		{
+			s_pMaterial = materials->FindMaterial( "portal/portal_surface", TEXTURE_GROUP_OTHER, false );
+		}
+	}
+
+	if ( !s_bLogged )
+	{
+		s_bLogged = true;
+		Portal_DebugLog( "[portal] surface material: '%s'%s",
+			( s_pMaterial != NULL ) ? s_pMaterial->GetName() : "(null)",
+			( s_pMaterial == NULL || s_pMaterial->IsErrorMaterial() ) ? " [MISSING/error]" : "" );
+	}
+
+	return s_pMaterial;
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: draw the opening polygon of a portal into the stencil buffer and
-//			(optional, dormant portals) faintly on screen
+//			tint the opening so the portal is visible even if the through-view
+//			cannot be rendered.
 //-----------------------------------------------------------------------------
 void CPortalRender::DrawPortalStencilQuad( C_Prop_Portal *pPortal )
 {
 	CMatRenderContextPtr pRenderContext( materials );
 
-	IMaterial *pMaterial = materials->FindMaterial( "debug/debugvertexcolor", TEXTURE_GROUP_OTHER, true );
+	IMaterial *pMaterial = GetPortalSurfaceMaterial();
+	if ( pMaterial == NULL )
+		return;
+
 	pRenderContext->Bind( pMaterial );
 
 	//nudge the quad off the wall toward the camera to avoid z-fighting with the wall
@@ -258,7 +306,11 @@ void CPortalRender::DrawPortalStencilQuad( C_Prop_Portal *pPortal )
 	vecQuad[2] = vTR + vecNudge;
 	vecQuad[3] = vTL + vecNudge;
 
-	pRenderContext->OverrideColorWriteEnable( true, false );
+	color32 color;
+	color.r = ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 40 : 84;
+	color.g = ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 60 : 42;
+	color.b = ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 68 : 8;
+	color.a = 180;
 
 	CMeshBuilder meshBuilder;
 	IMesh *pMesh = pRenderContext->GetDynamicMesh( false, NULL, NULL, pMaterial );
@@ -266,20 +318,21 @@ void CPortalRender::DrawPortalStencilQuad( C_Prop_Portal *pPortal )
 	for ( int i = 0; i < 4; ++i )
 	{
 		meshBuilder.Position3fv( vecQuad[i].Base() );
-		meshBuilder.Color4ub( 255, 255, 255, 255 );
+		meshBuilder.Color4ub( color.r, color.g, color.b, color.a );
 		meshBuilder.TexCoord2f( 0, 0.0f, 0.0f );
 		meshBuilder.AdvanceVertex();
 	}
 	meshBuilder.End( true, true );
-
-	pRenderContext->OverrideColorWriteEnable( false, false );
 }
 
 void CPortalRender::DrawDormantPortalSurface( C_Prop_Portal *pPortal )
 {
 	CMatRenderContextPtr pRenderContext( materials );
 
-	IMaterial *pMaterial = materials->FindMaterial( "debug/debugvertexcolor", TEXTURE_GROUP_OTHER, true );
+	IMaterial *pMaterial = GetPortalSurfaceMaterial();
+	if ( pMaterial == NULL )
+		return;
+
 	pRenderContext->Bind( pMaterial );
 
 	Vector vecNudge = pPortal->m_plane_Origin.normal;
@@ -403,6 +456,32 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 			continue;
 
 		visiblePortals.AddToTail( pPortal );
+	}
+
+	// Debug overlay: draw every portal opening's outline + normal so the
+	// geometry can be checked independently of the surface rasterisation.
+	if ( portal_debug_outline.GetBool() && m_iViewRecursionLevel == 0 )
+	{
+		for ( int i = 0; i < iPortalCount; ++i )
+		{
+			C_Prop_Portal *pPortal = CProp_Portal_Shared::AllPortals[i];
+			if ( pPortal == NULL || !pPortal->HasValidCorners() )
+				continue;
+
+			int r = ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 0 : 255;
+			int g = 128;
+			int b = ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 255 : 0;
+
+			for ( int c = 0; c < 4; ++c )
+			{
+				const Vector &vecA = pPortal->m_vPortalCorners[c];
+				const Vector &vecB = pPortal->m_vPortalCorners[( c + 1 ) & 3];
+				debugoverlay->AddLineOverlay( vecA, vecB, r, g, b, true, 0.0f );
+			}
+
+			Vector vecNormalEnd = pPortal->GetPortalOrigin() + pPortal->m_plane_Origin.normal * 48.0f;
+			debugoverlay->AddLineOverlay( pPortal->GetPortalOrigin(), vecNormalEnd, 255, 255, 255, true, 0.0f );
+		}
 	}
 
 	//even without linked views visible, dormant portals need their surfaces drawn

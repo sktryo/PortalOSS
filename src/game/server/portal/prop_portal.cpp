@@ -93,6 +93,14 @@ void CProp_Portal::Activate( void )
 		SetPortalType( ( PortalType )m_iPortalTypeAlias );
 	}
 
+	// A map portal without any colour key still needs a valid colour: the
+	// send table encodes the type in 3 unsigned bits, so PORTAL_TYPE_NONE
+	// would arrive at the client as garbage. Default such portals to blue.
+	if ( GetPortalType() != PORTAL_TYPE_BLUE && GetPortalType() != PORTAL_TYPE_ORANGE )
+	{
+		SetPortalType( PORTAL_TYPE_BLUE );
+	}
+
 	Portal_DebugLog( "[portal] prop_portal Activate: origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f) type=%d corners_valid=%d start_active=%d linkedname='%s'",
 		GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z,
 		GetAbsAngles().x, GetAbsAngles().y, GetAbsAngles().z,
@@ -221,6 +229,9 @@ void CProp_Portal::SetPortalActive( bool bActive )
 				continue;
 
 			if ( pOther->GetPortalType() == GetPortalType() )
+				continue;
+
+			if ( pOther->GetPortalType() != PORTAL_TYPE_BLUE && pOther->GetPortalType() != PORTAL_TYPE_ORANGE )
 				continue;
 
 			// LinkPortal() activates both sides of the pair.
