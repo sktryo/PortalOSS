@@ -59,46 +59,25 @@ if errorlevel 1 (
 )
 
 rem ---------------------------------------------------------------------
-rem Discover the solution configuration matching the requested one.
-rem VPC emits solution entries such as "Release|x64" but the exact platform
-rem name depends on the generated projects, and MSBuild rejects a
-rem Configuration/Platform pair the solution does not list. Parse the sln's
-rem solution configuration section and use whatever it actually contains.
+rem VPC on Windows x64 generates the solution configurations
+rem "<Config>|win64" (Debug|win64, Release|win64). MSBuild rejects any
+rem Configuration/Platform pair the solution does not list, so default the
+rem platform to win64; the 4th argument overrides it for other generators.
 rem ---------------------------------------------------------------------
-set "SOLCFG="
-set "SOLCONFIG="
-set "SOLPLATFORM="
-set "SOLCFGLIST=%TEMP%\portal_solution_configs.txt"
-set "SOLCFGMATCH=%TEMP%\portal_solution_config_match.txt"
-powershell -NoProfile -Command "$c=@(); foreach($m in Select-String -Path 'portal.sln' -Pattern '^[A-Za-z][A-Za-z0-9_ ]*\|[A-Za-z0-9_ ]+ *='){ $c += ($m.Line -split '=')[0].Trim() }; $c | Select-Object -Unique | Set-Content -Encoding ASCII '%SOLCFGLIST%'" >nul 2>&1
-
-rem NOTE: never pipe a for-variable that can contain '|' (cmd would treat the
-rem value as a pipeline). Redirect findstr to a file instead.
-findstr /i /c:"%CONFIG%|" "%SOLCFGLIST%" > "%SOLCFGMATCH%" 2>nul
-if exist "%SOLCFGMATCH%" (
-	for /f "usebackq delims=" %%L in ("%SOLCFGMATCH%") do (
-		if not defined SOLCFG set "SOLCFG=%%L"
-	)
-	del "%SOLCFGMATCH%" >nul 2>&1
-)
-
-if not defined SOLCFG (
-	echo [buildportal] Available solution configurations:
-	type "%SOLCFGLIST%"
-	echo [buildportal] No solution configuration matching "%CONFIG%" was found in portal.sln.
-	echo [buildportal] Regenerate the projects with createportalprojects.bat and retry.
-	del "%SOLCFGLIST%" >nul 2>&1
-	exit /b 1
-)
-del "%SOLCFGLIST%" >nul 2>&1
-
-for /f "tokens=1,2 delims=| " %%A in ("%SOLCFG%") do (
-	set "SOLCONFIG=%%A"
-	set "SOLPLATFORM=%%B"
-)
-set "CFGARGS=/p:Configuration=%SOLCONFIG%"
-if defined SOLPLATFORM set "CFGARGS=%CFGARGS% /p:Platform=%SOLPLATFORM%"
+set "SOLCONFIG=%CONFIG%"
+set "SOLPLATFORM=%~4"
+if not defined SOLPLATFORM set "SOLPLATFORM=win64"
+set "CFGARGS=/p:Configuration=%SOLCONFIG% /p:Platform=%SOLPLATFORM%"
 echo [buildportal] solution configuration: %SOLCONFIG%^|%SOLPLATFORM%
+
+rem Warn (but continue) when the solution does not list the pair.
+findstr /i /c:"%SOLCONFIG%|%SOLPLATFORM% =" portal.sln >nul 2>&1
+if errorlevel 1 (
+	echo [buildportal] warning: "%SOLCONFIG%|%SOLPLATFORM%" is not listed in portal.sln.
+	echo [buildportal] Listed configurations:
+	findstr /i /c:" = " portal.sln
+	echo [buildportal] Override with: buildportal.bat %TARGET% %ACTION% %SOLCONFIG% ^<platform^>
+)
 
 if /i "%TARGET%"=="server" (
 	set "PROJECT=Server (Portal)"
