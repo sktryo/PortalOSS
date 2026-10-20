@@ -115,6 +115,19 @@ public:
 	void					LinkPortal( CProp_Portal *pLinkedPortal );
 	void					UnLinkPortal( void );
 
+	// Map-logic control (prop_portal inputs: SetActivatedState / Fizzle /
+	// NewLocation). SetPortalActive(false) drops the link but keeps the entity.
+	void					SetPortalActive( bool bActive );
+	void					InputSetActivatedState( inputdata_t &inputdata );
+	void					InputFizzle( inputdata_t &inputdata );
+	void					InputNewLocation( inputdata_t &inputdata );
+
+	// Derive the opening's corners from the entity origin/angles (map placed).
+	void					BuildCornersFromOriginAngles( void );
+
+	// Fires OnPlacedSuccessfully for map logic that watches gun placements.
+	void					FirePlacedOutput( void ) { m_OnPlacedSuccessfully.FireOutput( this, this ); }
+
 	// Corners are passed in the same order they are stored: BL, BR, TR, TL.
 	void					SetupPortalCorners( const Vector &vBottomLeft, const Vector &vBottomRight,
 												const Vector &vTopRight, const Vector &vTopLeft );
@@ -134,6 +147,9 @@ public:
 private:
 	CNetworkVar( int, m_iPortalType );
 	string_t				m_strLinkedPortalName;
+	int						m_iLinkageGroupID;		// "LinkageGroupID" (single-player always 0)
+	bool					m_bStartActivated;		// "Activated" keyvalue
+	COutputEvent			m_OnPlacedSuccessfully;
 };
 
 //-----------------------------------------------------------------------------

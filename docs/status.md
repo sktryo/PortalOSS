@@ -10,15 +10,28 @@
 | --- | --- |
 | コードの静的レビュー | 実施済み |
 | Linux x86_64 でのフルビルド | **未確認** |
-| Windows でのフルビルド | **未確認** |
-| ゲーム内での動作確認 | **未確認** |
+| Windows でのフルビルド | 確認済み(VS 2022 / x64) |
+| ゲーム内での動作確認 | 一部確認済み(起動・メニュー・マップロード) |
 
 このリポジトリの作業環境は aarch64 で podman が利用できないため、
-x86_64 用の `devtools/bin/vpc` を実行できず、フルビルドと実機確認は
+x86_64 用の `devtools/bin/vpc` を実行できず、Linux 側のフルビルドは
 行えていません。コード変更は構文・API・データフローの静的確認に留まります。
 
-ビルド確認を行う場合は、x86_64 Linux + podman または Windows +
-Visual Studio 2022 の環境で [README](../README.md) の手順を実行してください。
+Windows 実機では 2013 MP エンジンでの起動、メニュー表示、`map
+testchmb_a_00` のロードまで確認できています。マップ内のポータル配置・
+ポータル越しの挙動は検証中です。
+
+### 1.1 エンジン側の既知の問題
+
+- `cl_localnetworkbackdoor`(シングルプレイのループバック最適化)を有効に
+  すると、部分更新のコピー時に `pStruct = (void*)-1` が送受信プロキシへ
+  渡され、最初のプレイヤーエンティティのスナップショットで
+  `SendProxy_FloatToFloat` がアクセス違反を起こします。クライアント DLL は
+  レベル開始時にこの cvar を 0 にします(機能上の差はありません)。
+- マップロード時に `Requested non-existent write path MOD!` が出て
+  `-condebug` / `con_logfile` が使えないため、診断ログは `std::ofstream` で
+  ゲームディレクトリの `portal_animtime.log` / `portal_debug.log` に直接
+  書き出しています。
 
 ## 2. 機能一覧
 

@@ -59,6 +59,26 @@
 	output OnPostSpawnedPortal(void) : "Fired after a portal was placed successfully"
 ]
 
+@PointClass base(Targetname, Parentname, Angles) size(-27 -27 -48, 27 27 48) color(0 100 255) =
+	prop_portal : "A portal. Portals placed in the map start invisible unless Activated is set; map logic usually turns them on with SetActivatedState"
+[
+	LinkageGroupID(integer) : "Portal pair ID" : 0 : "Single player uses 0"
+	PortalTwo(choices) : "Portal number" : 0 : "Which portal of the pair this one is" =
+	[
+		0 : "Portal 1 (blue)"
+		1 : "Portal 2 (orange)"
+	]
+	Activated(choices) : "Start activated" : 0 : "Inactive portals are not visible and do not teleport" =
+	[
+		0 : "Inactive"
+		1 : "Active"
+	]
+	input SetActivatedState(boolean) : "Turn the portal on (1) or off (0)"
+	input Fizzle(void) : "Deactivate the portal with fizzle sound and effects"
+	input NewLocation(string) : "Move the portal: X Y Z pitch yaw roll"
+	output OnPlacedSuccessfully(void) : "Fired when the portal gun placed this portal"
+]
+
 @PointClass base(Targetname, Parentname, Angles) size(-24 -24 -4, 24 24 4) color(0 100 255) =
 	linked_portal_door : "Sliding door that carries a portal. When fully open the portal on its resting plane becomes active (approximately implemented)"
 [

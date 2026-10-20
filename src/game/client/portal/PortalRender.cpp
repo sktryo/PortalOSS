@@ -384,7 +384,7 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 		for ( int i = 0; i < iPortalCount; ++i )
 		{
 			C_Prop_Portal *pPortal = CProp_Portal_Shared::AllPortals[i];
-			if ( pPortal == NULL || pPortal->IsActivatedAndLinked() )
+			if ( pPortal == NULL || !pPortal->m_bActivated || pPortal->IsActivatedAndLinked() )
 				continue;
 
 			Vector vecToPortal = pPortal->GetPortalOrigin() - CurrentViewOrigin();

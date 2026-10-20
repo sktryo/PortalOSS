@@ -23,6 +23,13 @@ LINK_ENTITY_TO_CLASS( prop_portal, CProp_Portal );
 
 BEGIN_DATADESC( CProp_Portal )
 	DEFINE_FIELD( m_strLinkedPortalName, FIELD_STRING ),
+	DEFINE_KEYFIELD( m_iPortalType, FIELD_INTEGER, "PortalTwo" ),
+	DEFINE_KEYFIELD( m_iLinkageGroupID, FIELD_INTEGER, "LinkageGroupID" ),
+	DEFINE_KEYFIELD( m_bStartActivated, FIELD_BOOLEAN, "Activated" ),
+	DEFINE_INPUTFUNC( FIELD_BOOLEAN, "SetActivatedState", InputSetActivatedState ),
+	DEFINE_INPUTFUNC( FIELD_VOID, "Fizzle", InputFizzle ),
+	DEFINE_INPUTFUNC( FIELD_STRING, "NewLocation", InputNewLocation ),
+	DEFINE_OUTPUT( m_OnPlacedSuccessfully, "OnPlacedSuccessfully" ),
 END_DATADESC()
 
 IMPLEMENT_SERVERCLASS_ST( CProp_Portal, DT_Prop_Portal )
@@ -37,6 +44,8 @@ CProp_Portal::CProp_Portal( void )
 {
 	SetPortalType( PORTAL_TYPE_NONE );
 	m_strLinkedPortalName = NULL_STRING;
+	m_iLinkageGroupID = 0;
+	m_bStartActivated = false;
 }
 
 CProp_Portal::~CProp_Portal( void )
@@ -68,30 +77,25 @@ void CProp_Portal::Activate( void )
 {
 	BaseClass::Activate();
 
-	Portal_DebugLog( "[portal] prop_portal Activate: origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f) type=%d corners_valid=%d linkedname='%s'",
+	Portal_DebugLog( "[portal] prop_portal Activate: origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f) type=%d corners_valid=%d start_active=%d linkedname='%s'",
 		GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z,
 		GetAbsAngles().x, GetAbsAngles().y, GetAbsAngles().z,
-		GetPortalType(), HasValidCorners() ? 1 : 0, STRING( m_strLinkedPortalName ) );
+		GetPortalType(), HasValidCorners() ? 1 : 0, m_bStartActivated ? 1 : 0,
+		STRING( m_strLinkedPortalName ) );
 
-	// A portal placed directly in the map has no corners yet (only the gun and
-	// the map spawner entities run the placement pipeline). Build the opening
-	// from the entity origin/angles so pre-placed portals are visible and usable.
+	// The engine calls Activate() for map-placed portals, which (unlike the
+	// gun/spawner placement path) have no corners yet. Build the opening from
+	// the entity origin/angles so pre-placed portals have real geometry.
 	if ( !HasValidCorners() )
 	{
-		Vector vecForward, vecRight, vecUp;
-		AngleVectors( GetAbsAngles(), &vecForward, &vecRight, &vecUp );
-		vecForward.NormalizeInPlace();
-		vecRight.NormalizeInPlace();
-		vecUp.NormalizeInPlace();
+		BuildCornersFromOriginAngles();
+	}
 
-		Vector vecCenter = GetAbsOrigin();
-		Vector vBL = vecCenter - vecRight * PORTAL_HALF_WIDTH - vecUp * PORTAL_HALF_HEIGHT;
-		Vector vBR = vecCenter + vecRight * PORTAL_HALF_WIDTH - vecUp * PORTAL_HALF_HEIGHT;
-		Vector vTR = vecCenter + vecRight * PORTAL_HALF_WIDTH + vecUp * PORTAL_HALF_HEIGHT;
-		Vector vTL = vecCenter - vecRight * PORTAL_HALF_WIDTH + vecUp * PORTAL_HALF_HEIGHT;
-		SetupPortalCorners( vBL, vBR, vTR, vTL );
-
-		Portal_DebugLog( "[portal] prop_portal: built corners from origin/angles (map placed)" );
+	// Map logic turns pre-placed portals on through SetActivatedState, but
+	// "Activated" 1 in the VMF means the pair is live from the start.
+	if ( m_bStartActivated )
+	{
+		SetPortalActive( true );
 	}
 
 	// Helper for maps that pre-place portals via .bsp
@@ -130,6 +134,120 @@ int CProp_Portal::GetPortalType( void )
 void CProp_Portal::SetPortalType( PortalType iPortalType )
 {
 	m_iPortalType = iPortalType;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Build the four corners of the opening from the entity's placement.
+//			Used by portals placed directly in the map (the gun and the map
+//			spawner entities go through Portal_PlacePortal instead).
+//-----------------------------------------------------------------------------
+void CProp_Portal::BuildCornersFromOriginAngles( void )
+{
+	Vector vecForward, vecRight, vecUp;
+	AngleVectors( GetAbsAngles(), &vecForward, &vecRight, &vecUp );
+	vecForward.NormalizeInPlace();
+	vecRight.NormalizeInPlace();
+	vecUp.NormalizeInPlace();
+
+	// Hammer shows the portal's facing direction as the entity's forward axis.
+	// UpdatePortalPlaneFromCorners() derives the normal as Right x Up, so flip
+	// the right axis to make the normal point along forward (out of the wall).
+	vecRight.Negate();
+
+	Vector vecCenter = GetAbsOrigin();
+	Vector vBL = vecCenter - vecRight * PORTAL_HALF_WIDTH - vecUp * PORTAL_HALF_HEIGHT;
+	Vector vBR = vecCenter + vecRight * PORTAL_HALF_WIDTH - vecUp * PORTAL_HALF_HEIGHT;
+	Vector vTR = vecCenter + vecRight * PORTAL_HALF_WIDTH + vecUp * PORTAL_HALF_HEIGHT;
+	Vector vTL = vecCenter - vecRight * PORTAL_HALF_WIDTH + vecUp * PORTAL_HALF_HEIGHT;
+	SetupPortalCorners( vBL, vBR, vTR, vTL );
+
+	Portal_DebugLog( "[portal] prop_portal: built corners from origin/angles, normal=(%.2f %.2f %.2f)",
+		m_plane_Origin.normal.x, m_plane_Origin.normal.y, m_plane_Origin.normal.z );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Turn a portal on/off from map logic without destroying the entity.
+//			An activated portal links itself to the opposite colour portal when
+//			that portal already has geometry (map logic activates each portal
+//			of a pair independently; the one activated last completes the pair).
+//-----------------------------------------------------------------------------
+void CProp_Portal::SetPortalActive( bool bActive )
+{
+	if ( !bActive )
+	{
+		CProp_Portal *pLinkedPortal = m_hLinkedPortal;
+		m_hLinkedPortal = NULL;
+		m_bActivated = false;
+		if ( pLinkedPortal != NULL )
+		{
+			// The partner keeps its own activated state; only the link dies.
+			pLinkedPortal->m_hLinkedPortal = NULL;
+		}
+		RecalculatePortalTransforms();
+		Portal_DebugLog( "[portal] prop_portal deactivated (origin=(%.1f %.1f %.1f))",
+			GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z );
+		return;
+	}
+
+	if ( !HasValidCorners() )
+	{
+		BuildCornersFromOriginAngles();
+	}
+
+	m_bActivated = true;
+
+	if ( m_hLinkedPortal == NULL )
+	{
+		for ( int i = 0; i < CProp_Portal_Shared::AllPortals.Count(); ++i )
+		{
+			CProp_Portal *pOther = CProp_Portal_Shared::AllPortals[i];
+			if ( pOther == this || pOther == NULL || !pOther->HasValidCorners() )
+				continue;
+
+			if ( pOther->GetPortalType() == GetPortalType() )
+				continue;
+
+			// LinkPortal() activates both sides of the pair.
+			LinkPortal( pOther );
+			Portal_DebugLog( "[portal] prop_portal activated and linked to portal type %d",
+				pOther->GetPortalType() );
+			return;
+		}
+	}
+
+	RecalculatePortalTransforms();
+	Portal_DebugLog( "[portal] prop_portal activated, no link partner yet (origin=(%.1f %.1f %.1f))",
+		GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Input handlers matching Portal's prop_portal entity.
+//-----------------------------------------------------------------------------
+void CProp_Portal::InputSetActivatedState( inputdata_t &inputdata )
+{
+	SetPortalActive( inputdata.value.Bool() );
+}
+
+void CProp_Portal::InputFizzle( inputdata_t &inputdata )
+{
+	Fizzle( PORTAL_FIZZLE_FIZZLER );
+}
+
+void CProp_Portal::InputNewLocation( inputdata_t &inputdata )
+{
+	// NewLocation expects "X Y Z pitch yaw roll".
+	float flValues[6] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+	UTIL_StringToFloatArray( flValues, 6, STRING( inputdata.value.StringID() ) );
+
+	Vector vecOrigin( flValues[0], flValues[1], flValues[2] );
+	QAngle angAngles( flValues[3], flValues[4], flValues[5] );
+
+	Teleport( &vecOrigin, &angAngles, NULL );
+	BuildCornersFromOriginAngles();
+
+	Portal_DebugLog( "[portal] prop_portal NewLocation: value='%s' origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f)",
+		STRING( inputdata.value.StringID() ),
+		vecOrigin.x, vecOrigin.y, vecOrigin.z, angAngles.x, angAngles.y, angAngles.z );
 }
 
 //-----------------------------------------------------------------------------
@@ -490,8 +608,15 @@ CProp_Portal *Portal_PlacePortal( PortalType type, const cplane_t &tracePlane, c
 	{
 		pNewPortal->LinkPortal( pOtherColorPortal );
 	}
+	else
+	{
+		// A lone portal is still visible (its opening is drawn as a dormant
+		// surface); only inactive map portals stay hidden.
+		pNewPortal->m_bActivated = true;
+	}
 
 	pNewPortal->Activate();
+	pNewPortal->FirePlacedOutput();
 
 	Portal_DebugLog( "[portal] PlacePortal OK: type=%d center=(%.1f %.1f %.1f) size=%.1fx%.1f linked=%s",
 		(int)type, vecPlacementCenter.x, vecPlacementCenter.y, vecPlacementCenter.z,
