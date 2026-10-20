@@ -93,6 +93,22 @@ createportalprojects.bat
 `src\portal.sln` が生成されるので、Visual Studio で開いて
 **Build > Build Solution** を実行します。
 
+### コマンドラインからのビルド(推奨)
+
+IDE でのソリューション全体ビルドは、未使用 SDK プロジェクトの警告・
+VPC 生成マクロ由来のノイズが大量に混ざります。単一プロジェクトだけを
+MSBuild でビルドし、エラーとサマリだけを表示するヘルパーがあります。
+
+```bat
+cd src
+buildportal.bat                  :: Server (Portal) を Release ビルド
+buildportal.bat client           :: Client (Portal)
+buildportal.bat launcher         :: ランチャー (post-build で game\ へコピー)
+buildportal.bat server rebuild   :: Clean + Rebuild
+buildportal.bat server debug     :: Debug 構成
+buildportal.bat all              :: ソリューション全体
+```
+
 生成物:
 
 | 生成物 | 場所 |
