@@ -32,9 +32,10 @@ Visual Studio 2022 の環境で [README](../README.md) の手順を実行して�
 | ポータル平面・変換行列 | 実装済み | コーナーから再計算 |
 | コーナーのネットワーク同期 | 実装済み | `SendPropArray3` / `RecvPropArray3` |
 | ポータル開口部のサイズ調整 | 簡易実装 | 4 方向 trace で周囲の壁に合わせる |
-| 設置可能面の材質判定 | 未実装 | 現在はワールドの任意の面に設置可能 |
+| 設置可能面の材質判定 | 簡易実装 | `SURF_NODRAW` / スカイ / `tools/nodraw`・`tools/skybox` 系の面を拒否 |
 | ポータル表面の BSP 穴あき | 未実装 | trace/描画/テレポートで代替 |
-| ポータルの fizzle | 簡易実装 | サウンド + `PortalFizzle` ディスパッチ |
+| ポータルの fizzle | 実装済み | サウンド + クライアント `PortalFizzle` エフェクト(dlight) |
+| 異色ポータル上への置き換え禁止 | 実装済み | 既存ポータルと重なる位置への設置は Fizzle で失敗 |
 | ポータル越しの弾丸 trace | 実装済み | `UTIL_Portal_TraceRay` |
 | ポータル越しのビーム trace | 実装済み | `UTIL_Portal_Trace_Beam` |
 | ポータル越しのエンティティ trace | 簡易実装 | スイープの 1 回転送 |
@@ -46,9 +47,10 @@ Visual Studio 2022 の環境で [README](../README.md) の手順を実行して�
 | --- | --- | --- |
 | `CPortal_Player` | 実装済み | `CHL2_Player` 継承 |
 | ポータルガンの初期装備 | 実装済み | スポーン時に付与 |
-| 移動速度のポータル変換 | **未実装** | 以前の部分実装 (`PortalReachableMove()`) は削除済み |
-| 視点角のポータル変換 | **未実装** | 同上 |
-| プレイヤー位置のポータル間テレポート | **未実装** | `CPortalGameMovement` はストック HL2 移動をそのまま使用 |
+| 移動速度のポータル変換 | 簡易実装 | `CPortalGameMovement::ProcessMovement` でリンク先空間へ変換 |
+| 視点角のポータル変換 | 簡易実装 | 位置/速度と同時に変換(クライアントは `engine->SetViewAngles`) |
+| プレイヤー位置のポータル間テレポート | 簡易実装 | 開口部進入検出は origin ベース・ペアあたり 0.25 秒の cooldown あり |
+| +USE でのプロップ掴み | 簡易実装 | ストック `player_pickup` コントローラを使用(武装はホルスターされる) |
 | ポータル越しの PVS 拡張 | 簡易実装 | リンク先の原点を追加 |
 | クロスヘア抑制 | 実装済み | `logic_playerproxy` 連携 |
 | Portal 本編の HUD | 未実装 | クロスヘア抑制のみ |
@@ -59,9 +61,10 @@ Visual Studio 2022 の環境で [README](../README.md) の手順を実行して�
 | 機能 | 状態 | 備考 |
 | --- | --- | --- |
 | vphysics プロップのポータル通過 | 実装済み | 平面交差時にテレポート |
-| 位置・速度・角速度の変換 | 実装済み | `CPortalSimulator::PostPhysFrame` |
+| 位置・速度・角速度の変換 | 実装済み | `CPortalSimulator::PostPhysFrame`(出口平面前への押し出し付き) |
 | ポータル越しの連続物理空間 | 未実装 | シャドウクローンは使用しない |
 | プレイヤーの物理押し出し | 未実装 | 移動は gamemovement 側で処理 |
+| 持ち上げ中プロップの通過 | 簡易実装 | 単独で通過した場合はドロップ(引き戻し振動を防止) |
 | ポータル越しの衝突イベント | 簡易実装 | `CPortal_CollisionEvent` |
 
 ### 2.4 描画
@@ -84,9 +87,10 @@ Visual Studio 2022 の環境で [README](../README.md) の手順を実行して�
 | `weapon_portalgun` | 実装済み | ヒットスキャン方式 |
 | `prop_weighted_cube` | 簡易実装 | 既定モデルのみ |
 | `prop_floor_button` | 簡易実装 | 球内のプレイヤー/キューブを検出 |
-| `trigger_portal_cleanser` | 簡易実装 | AABB 判定 |
-| `linked_portal_door` | 未実装 | - |
-| `prop_portal_spawner` | 未実装 | - |
+| `trigger_portal_cleanser` | 簡易実装 | ポータル開口部とブラシの AABB 重複で Fizzle |
+| `linked_portal_door` | 簡易実装 | 開扉でポータル有効化/閉扉で Fizzle |
+| `prop_portal_spawner` | 簡易実装 | 正面の面へ `Portal_PlacePortal` で設置 |
+| `prop_button` | 簡易実装 | +USE 押下中 `OnPressed`/`OnUnpressed` |
 | `func_portal_orientation` | 未実装 | - |
 | `env_portal_pathtrack` | 未実装 | - |
 | `npc_security_camera` | 未実装 | - |
@@ -96,10 +100,13 @@ Visual Studio 2022 の環境で [README](../README.md) の手順を実行して�
 
 ### 3.1 ポータル配置
 
-- 表面の材質を判定していないため、本来ポータルを置けない面にも設置できます。
+- 材質判定は `SURF_NODRAW` / スカイ面 / `tools/nodraw`・`tools/skybox`・
+  `tools/noportal`・`tools/nolight` の拒否のみで、Portal 本編のような
+  メッシュ指向(面の法線・面積)ベースの判定ではありません。
 - `FindPlacementExtents()` は平面上の 4 方向 trace のみで、開口部の形状を
   厳密に求めるものではありません。
-- ポータル同士が近接・重複する場合の配置制限はありません。
+- 2 門(青/オレンジ)の固定ペア制限は本編と同じですが、同一ポータル上への
+  再設置は既存ポータルを Fizzle して置き換わります。
 
 ### 3.2 trace
 
@@ -113,18 +120,20 @@ Visual Studio 2022 の環境で [README](../README.md) の手順を実行して�
 
 ### 3.3 移動・物理
 
-- プレイヤーのポータル通過は未実装です。`CPortalGameMovement` はストック
-  `CHL2GameMovement` を継承し、オーバーライドしていません。ポータル開口部は
-  設置された壁と同じ扱いで衝突します。以前の部分実装は移動 trace のみを
-  ポータル越しに延長し、速度・視点角の変換を試みていましたが、プレイヤー
-  位置をリンク先へテレポートする処理がなく、壁抜けを許す恐れがあったため
-  削除しました。実装する場合は `ProcessMovement()` 内でポータル平面を
-  検出し、`mv->SetAbsOrigin()` と `mv->m_vecVelocity` を変換してから
-  移動を完了させる必要があります。
+- プレイヤーのポータル通過は `CPortalGameMovement::ProcessMovement` の冒頭で
+  実装しています。開口部進入は origin ベースの近似(壁面 26、床面 6 tile)
+  であり、 hull 全体の開口部との交差を厳密には判定しません。そのため
+  壁の薄い場所や狭い開口部では判定が粗くなります。
+- 各ポータルペアに 0.25 秒の cooldown があり、出口から出るまで再進入を
+  抑制します。
 - ポータル内での押し出しや段差処理も完全ではありません。
+- +USE 掴みはストック `player_pickup` コントローラを使用するため、
+  掴んでいる間はポータルガンがホルスターされます(本編ではガンが
+  見えたままです)。+ATTACK で投げ、再 +USE でドロップします。
 - vphysics プロップはフレーム終了時にテレポートする方式です。
   高速で移動するオブジェクトや、ポータル平面に沿った接触は
-  正しく扱えない場合があります。
+  正しく扱えない場合があります。持ち上げ中のプロップが持主と別に
+  通過した場合はドロップします。
 - ポータル越しの連続した物理空間(シャドウクローン)は実装していません。
 
 ### 3.4 描画
@@ -142,8 +151,10 @@ Visual Studio 2022 の環境で [README](../README.md) の手順を実行して�
 - Portal 本編の HUD、字幕、実績、チャレンジモード、開発者コメントは
   実装していません。
 - NPC はポータルを認識せず、ポータル越しのナビゲーションも行いません。
-- `linked_portal_door` などのマップエンティティが未実装のため、
-  該当するマップでは「クラスが見つからない」警告が出ます。
+- `func_portal_orientation` / `env_portal_pathtrack` などのマップエンティティが
+  未実装のため、該当するマップでは「クラスが見つからない」警告が出ます。
+  `prop_portal_spawner` / `linked_portal_door` / `prop_button` は近似実装が
+  追加されています。
 - セーブ/ロードは SDK の汎用機構に依存しており、ポータル状態の
   完全な保存・復元は検証していません。
 
@@ -151,8 +162,11 @@ Visual Studio 2022 の環境で [README](../README.md) の手順を実行して�
 
 1. x86_64 環境でフルビルドし、コンパイルエラーとリンクエラーを解消する。
 2. テストマップでポータル配置・リンク・trace・描画を確認する。
-3. 設置可能面の材質判定を追加する。
-4. ポータル表面の専用マテリアルとクライアント側 fizzle エフェクトを実装する。
-5. プレイヤー移動と物理のポータル通過を安定化する。
-6. `linked_portal_door` など主要な Portal エンティティを追加する。
+3. プレイヤー通過の hull 精密切際判定と出口残差のフィードバック(壁挟まり・
+   天井薄マップ)を検証する。
+4. +USE 掴み中のポータルガン解像度(ホルスターせず ATTACK を投擲に
+   割当てる)を検討する。
+5. ポータル表面の専用マテリアルとクライアント側視差を整備する。
+6. `func_portal_orientation` / `env_portal_pathtrack` / NPC 系など主要な
+   Portal エンティティを追加する。
 7. HUD とゲームルール(チャレンジモード)を整備する。

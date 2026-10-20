@@ -135,23 +135,27 @@ game/portal_linux64 -game "$(pwd)/game/portal"
 
 - ポータルガンによる青/オレンジのポータル配置と、2 門のリンク
 - コーナー座標からポータル平面・変換行列を構築する共有ジオメトリ
-- ポータルを貫通するレイトレース(弾丸、ビーム、汎用 trace / エンティティ trace)
+- ポータルを貫通するレイトレース(弾丸、発射ビーム、汎用 trace / エンティティ trace)
 - vphysics プロップのポータル通過時のテレポート
+- プレイヤーのポータル通過(位置・速度・視点角のリンク先空間への変換、
+  `CPortalGameMovement`)
+- +USE でのプロップ掴み/投擲(ストック `player_pickup` コントローラ)
+- 設置面の簡易制限(`SURF_NODRAW` / スカイ / nodraw・noportal 系の拒否)と
+  fizzle 効果
 - ステンシル方式のポータル越し描画(再帰ビュー、最大 4 段)
 - `_rt_Portal1` / `_rt_Portal2` へのオプション レンダーターゲット描画
-- `prop_weighted_cube`, `prop_floor_button`, `trigger_portal_cleanser`
+- `prop_weighted_cube`, `prop_floor_button`, `prop_button`,
+  `prop_portal_spawner`, `linked_portal_door`, `trigger_portal_cleanser`
 - クライアントへのポータル状態(コーナー、リンク、種類)のネットワーク同期
 
 主な未実装・簡易実装:
 
-- プレイヤーのポータル通過(位置・速度・視点角のいずれも未実装。
-  以前の部分実装は壁抜けの懸念から削除済み)
-- ポータルを設置できる表面の制限(現在はワールドの任意の面に設置可能)
-- `linked_portal_door`, `prop_portal_spawner`, `func_portal_orientation`,
-  `env_portal_pathtrack`, `npc_security_camera` など
+- `func_portal_orientation`, `env_portal_pathtrack`, `npc_security_camera` など
+  (周辺エンティティは近似実装)
 - Portal 本編の HUD、実績、チャレンジモード
 - NPC のポータル経由ナビゲーション
 - ポータル越しの完全な物理シミュレーション(現在はプロップのテレポート方式)
+- 掴み中はポータルガンがホルスターされる(見た目の差異)
 
 詳細は [docs/status.md](docs/status.md)、設計は
 [docs/architecture.md](docs/architecture.md) を参照してください。
