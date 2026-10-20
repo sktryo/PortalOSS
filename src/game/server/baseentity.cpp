@@ -105,6 +105,21 @@ void SendProxy_AnimTime( const SendProp *pProp, const void *pStruct, const void 
 {
 	CBaseEntity *pEntity = (CBaseEntity *)pStruct;
 
+	// PORTAL: Trap clearly invalid struct pointers handed to the packer. The
+	// engine normally guarantees a valid entity here, but a corrupted edict
+	// reaches this proxy as 0xFF..FF during map load. Log the offending edict
+	// (index/class) and encode a harmless value so the snapshot can complete.
+	if ( ( (uintptr_t)pStruct >= 0xFFF0000000000000ULL ) || ( (uintptr_t)pStruct < 0x1000ULL ) )
+	{
+		edict_t *pEdict = engine->PEntityOfEntIndex( objectID );
+		const char *pszClass = "???";
+		if ( pEdict != NULL && pEdict->GetClassName() != NULL )
+			pszClass = pEdict->GetClassName();
+		Msg( "SendProxy_AnimTime: invalid pStruct %p (objectID %d, class '%s')\n", pStruct, objectID, pszClass );
+		pOut->m_Int = 0;
+		return;
+	}
+
 #if defined( _DEBUG )
 	CBaseAnimating *pAnimating = pEntity->GetBaseAnimating();
 	Assert( pAnimating );
