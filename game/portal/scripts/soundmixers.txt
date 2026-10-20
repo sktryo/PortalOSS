@@ -1,0 +1,10 @@
+// Minimal sound mixer configuration for the Portal mod.
+//
+// The SDK 2013 engine treats a missing game/scripts/soundmixers.txt as a
+// fatal error at startup (MXR_LoadAllSoundMixers), which pops an error dialog
+// and exits. The mounted Portal (AppID 400) content predates the sound mixer
+// system and does not ship the file, so provide an empty mixer set; the
+// engine's default mixer behavior is used.
+"SoundMixers"
+{
+}
