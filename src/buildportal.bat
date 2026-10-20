@@ -75,6 +75,10 @@ if exist "%SOLCFGLIST%" (
 	for /f "usebackq delims=" %%L in ("%SOLCFGLIST%") do (
 		echo %%L | findstr /i /c:"%CONFIG%|" >nul && set "SOLCFG=%%L"
 	)
+	if not defined SOLCFG (
+		echo [buildportal] Available solution configurations:
+		type "%SOLCFGLIST%"
+	)
 	del "%SOLCFGLIST%" >nul 2>&1
 )
 
