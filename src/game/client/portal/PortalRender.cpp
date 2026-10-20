@@ -269,8 +269,8 @@ void CPortalRender::HandlePortalPlaybackMessage( KeyValues *pKeyValues )
 //			provides debug/debugvertexcolor, but this mod only mounts the SDK
 //			platform + Portal content, so fall back to a material we ship.
 //-----------------------------------------------------------------------------
-// 0 = auto (debug/debugvertexcolor, falling back to the mod material)
-// 1 = force the mod-shipped portal/portal_surface material
+// 0 = auto (the mod-shipped portal/portal_surface material)
+// 1 = force portal/portal_surface
 // 2 = force debug/debugvertexcolor without the NOCULL override
 ConVar portal_debug_surface_mat( "portal_debug_surface_mat", "0", FCVAR_CHEAT,
 	"Select the portal opening material for diagnostics." );
@@ -285,9 +285,9 @@ static IMaterial *GetPortalSurfaceMaterial( void )
 	{
 		s_bResolved = true;
 
-		const char *pName = "debug/debugvertexcolor";
-		if ( portal_debug_surface_mat.GetInt() == 1 )
-			pName = "portal/portal_surface";
+		const char *pName = "portal/portal_surface";
+		if ( portal_debug_surface_mat.GetInt() == 2 )
+			pName = "debug/debugvertexcolor";
 
 		IMaterial *pMat = materials->FindMaterial( pName, TEXTURE_GROUP_OTHER, false );
 		if ( pMat == NULL || pMat->IsErrorMaterial() )
@@ -301,6 +301,11 @@ static IMaterial *GetPortalSurfaceMaterial( void )
 			// produces; force two-sided so the stencil mask is always written.
 			if ( portal_debug_surface_mat.GetInt() != 2 )
 				s_pMaterial->SetMaterialVarFlag( MATERIAL_VAR_NOCULL, true );
+
+			// Force the material to decide its vertex format up front. A lazy
+			// GetVertexFormat()==0 makes GetDynamicMesh() hand back a zero-size
+			// vertex buffer and the opening quad rasterises nothing.
+			s_pMaterial->Refresh();
 		}
 	}
 
