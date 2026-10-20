@@ -69,6 +69,12 @@ void CProp_Portal::Spawn( void )
 	SetMoveType( MOVETYPE_NONE );
 	SetBlocksLOS( false );
 
+	// A portal has no model. CBaseEntity::UpdateTransmitState() drops
+	// model-less entities (FL_EDICT_DONTSEND), so without this the client
+	// never receives the portal entity at all.
+	AddEFlags( EFL_FORCE_CHECK_TRANSMIT );
+	DispatchUpdateTransmitState();
+
 	m_bActivated = false;
 	m_hLinkedPortal = NULL;
 
