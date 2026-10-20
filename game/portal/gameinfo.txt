@@ -24,6 +24,13 @@
 			// Mod dir first, so our own overrides win
 			Game				|gameinfo_path|.
 
+			// Where the game's binaries are. The engine looks up client/server
+			// DLLs via the "gamebin" path ID. Add both the literal x64 layout
+			// and the plain bin dir (the engine may append a platform subdir
+			// itself, e.g. bin/x64 on Windows64, bin/linux64 on Linux).
+			gamebin				|gameinfo_path|bin/x64
+			gamebin				|gameinfo_path|bin
+
 			// Stock Portal content. Portal packs its content into VPKs, so
 			// the pak/VO archives must be mounted explicitly; the folder
 			// mount is a fallback for loose files.
