@@ -8,6 +8,7 @@
 #include "cbase.h"
 #include "portal_player.h"
 #include "player.h"
+#include "in_buttons.h"
 #include "gamerules.h"
 #include "portal_gamerules.h"
 #include "prop_portal_shared.h"
@@ -57,6 +58,47 @@ void CPortal_Player::Spawn( void )
 void CPortal_Player::SuppressCrosshair( bool bSuppress )
 {
 	m_bSuppressCrosshair = bSuppress;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Portal hand pickup. Stock HL2 only picks up props with the
+//			physcannon weapon; Portal grabs props with +USE. When the +USE
+//			key is newly pressed, look for a carryable physics prop under
+//			the crosshair and start the generic player_pickup controller.
+//			Holding works through the stock controller: the held prop
+//			follows the eye position each frame, +USE again or losing
+//			sight of it drops it, and +ATTACK1 throws it.
+//-----------------------------------------------------------------------------
+void CPortal_Player::PlayerUse( void )
+{
+	// While already holding something, +USE means "drop"; the stock path
+	// handles that through the pickup controller. Only grab a new prop when
+	// nothing is held.
+	if ( ( m_afButtonPressed & IN_USE ) && GetUseEntity() == NULL )
+	{
+		// Negligible grab reach, in front of the eye
+		const float PORTAL_GRAB_RANGE = 60.0f;
+
+		Vector vecForward;
+		AngleVectors( EyeAngles(), &vecForward );
+
+		trace_t tr;
+		UTIL_TraceLine( EyePosition(), EyePosition() + vecForward * PORTAL_GRAB_RANGE,
+						MASK_SOLID, this, COLLISION_GROUP_PLAYER, &tr );
+
+		CBaseEntity *pEnt = tr.m_pEnt;
+		if ( pEnt != NULL && !tr.DidHitWorld() &&
+			 pEnt->VPhysicsGetObject() != NULL &&
+			 pEnt->VPhysicsGetObject()->IsMoveable() &&
+			 !pEnt->IsNPC() && !pEnt->IsPlayer() &&
+			 CBasePlayer::CanPickupObject( pEnt, 85, 160 ) )
+		{
+			PickupObject( pEnt, false );
+			return;
+		}
+	}
+
+	BaseClass::PlayerUse();
 }
 
 void CPortal_Player::InputSuppressCrosshair( inputdata_t &inputdata )

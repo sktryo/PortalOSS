@@ -102,6 +102,13 @@ void CPortalSimulator::PostPhysFrame( void )
 			Vector vecTransformed;
 			UTIL_Portal_PointTransform( matThisToLinked, vecCurrOrigin, vecTransformed );
 
+			// The transform lands the object behind the exit wall; push it out
+			// to just in front of the exit plane so vphysics never sees it
+			// inside the solid.
+			const cplane_t &planeExit = pPortal->m_hLinkedPortal->m_plane_Origin;
+			float flBehind = DotProduct( vecTransformed, planeExit.normal ) - planeExit.dist;
+			vecTransformed += planeExit.normal * ( PORTAL_SKIN_LENGTH + 2.0f - flBehind );
+
 			Vector vecVelocity;
 			AngularImpulse angImpulse;
 			pPhysics->GetVelocity( &vecVelocity, &angImpulse );
@@ -113,6 +120,16 @@ void CPortalSimulator::PostPhysFrame( void )
 
 			pEntity->Teleport( &vecTransformed, NULL, NULL );
 			pPhysics->SetVelocity( &vecNewVelocity, &angNewImpulse );
+
+			// A held prop that goes through without its carrier tears out of the
+			// grab controller's constraint and gets yanked back through the
+			// plane (oscillating); drop the carry instead, which is also how
+			// pushing an object through a portal by hand works.
+			CBasePlayer *pHeldBy = pEntity->HasPhysicsAttacker( 0.5f );
+			if ( pHeldBy != NULL && ( pPhysics->GetGameFlags() & FVPHYSICS_PLAYER_HELD ) )
+			{
+				pHeldBy->ForceDropOfCarriedPhysObjects( pEntity );
+			}
 			break;
 		}
 	}

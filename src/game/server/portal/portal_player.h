@@ -27,6 +27,11 @@ public:
 	virtual void	Spawn( void );
 	virtual void	Precache( void );
 
+	// Portal-style hand pickup: +USE grabs the physics prop under the
+	// crosshair (Crosshair pickup isn't in stock HL2, which needs the
+	// weapon_physcannon for the same effect).
+	virtual void	PlayerUse( void );
+
 	// Crosshair suppression (used by logic_playerproxy inputs in cutscene maps)
 	void			SuppressCrosshair( bool bSuppress );
 	bool			IsSuppressingCrosshair( void ) const { return m_bSuppressCrosshair; }
