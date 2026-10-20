@@ -328,17 +328,22 @@ int CRecordingList::Count()
 // entindex(); log the property source and skip the update instead of killing
 // the client during the first snapshot.
 // -condebug does not work in this mod, so also append to a plain file.
-static void PortalLogBadRecvAnimTime( const char *pszWhere, const CRecvProxyData *pData, void *pStruct )
+static void PortalLogBadRecvAnimTime( const char *pszWhere, const CRecvProxyData *pData, void *pStruct, void *pOut )
 {
 	const char *pszProp = ( pData != NULL && pData->m_pRecvProp != NULL ) ? pData->m_pRecvProp->GetName() : "?";
+	int iValue = ( pData != NULL ) ? pData->m_Value.m_Int : 0;
 
-	Msg( "RecvProxy_AnimTime: %s, pStruct %p (prop '%s')\n", pszWhere, pStruct, pszProp );
+	char szLine[384];
+	Q_snprintf( szLine, sizeof( szLine ),
+		"RecvProxy_AnimTime: %s, prop '%s', pStruct %p, pOut %p, value %d, tickcount %d",
+		pszWhere, pszProp, pStruct, pOut, iValue, gpGlobals->tickcount );
+
+	Msg( "%s\n", szLine );
 
 	std::ofstream log( "portal_animtime.log", std::ios::app );
 	if ( log.is_open() )
 	{
-		log << "RecvProxy_AnimTime: " << pszWhere << ", pStruct " << pStruct
-			<< " (prop '" << pszProp << "')\n";
+		log << szLine << "\n";
 	}
 }
 
@@ -350,7 +355,7 @@ static void RecvProxy_AnimTimeInternal( const CRecvProxyData *pData, void *pStru
 	// Cheap trap for clearly bogus pointers; the SEH wrapper catches the rest.
 	if ( ( (uintptr_t)pStruct >= 0xFFF0000000000000ULL ) || ( (uintptr_t)pStruct < 0x1000ULL ) )
 	{
-		PortalLogBadRecvAnimTime( "invalid pStruct", pData, pStruct );
+		PortalLogBadRecvAnimTime( "invalid pStruct", pData, pStruct, pOut );
 		return;
 	}
 
@@ -386,7 +391,7 @@ void RecvProxy_AnimTime( const CRecvProxyData *pData, void *pStruct, void *pOut 
 	}
 	__except( EXCEPTION_EXECUTE_HANDLER )
 	{
-		PortalLogBadRecvAnimTime( "access violation", pData, pStruct );
+		PortalLogBadRecvAnimTime( "access violation", pData, pStruct, pOut );
 	}
 #else
 	RecvProxy_AnimTimeInternal( pData, pStruct, pOut );

@@ -110,27 +110,42 @@ ConVar sv_script_think_interval("sv_script_think_interval", "0.1");
 // in <stdio.h> while that macro is active, so the CRT only ever declares a
 // function named dont_use_fopen. Use the STL stream instead of stdio here
 // (included at the top of the file, before memdbgon.h).
-// This table encodes edict data.
+
 // PORTAL: The engine hands us the entity being packed. When a corrupted
 // edict reaches this proxy it faults in the struct/body deref, which kills
 // the whole snapshot. Split the body so it can be wrapped in SEH and logged.
 //
 // -condebug does not work in this mod, so also append the message to a plain
 // file next to the launcher (the engine's write path for the MOD is broken).
-static void PortalLogBadAnimTime( const char *pszWhere, const void *pStruct, int objectID )
+static void PortalLogBadAnimTime( const char *pszWhere, const SendProp *pProp, const void *pStruct, const void *pVarData, const void *pOut, int iElement, int objectID )
 {
 	edict_t *pEdict = engine->PEntityOfEntIndex( objectID );
 	const char *pszClass = "???";
-	if ( pEdict != NULL && pEdict->GetClassName() != NULL )
-		pszClass = pEdict->GetClassName();
+	IServerUnknown *pUnk = NULL;
+	IServerNetworkable *pNet = NULL;
+	CBaseEntity *pEdictEnt = NULL;
+	if ( pEdict != NULL )
+	{
+		if ( pEdict->GetClassName() != NULL )
+			pszClass = pEdict->GetClassName();
 
-	Msg( "SendProxy_AnimTime: %s, pStruct %p (objectID %d, class '%s')\n", pszWhere, pStruct, objectID, pszClass );
+		pUnk = pEdict->GetUnknown();
+		pNet = pEdict->GetNetworkable();
+		pEdictEnt = ( pUnk != NULL ) ? pUnk->GetBaseEntity() : NULL;
+	}
+
+	char szLine[512];
+	Q_snprintf( szLine, sizeof( szLine ),
+		"SendProxy_AnimTime: %s, prop '%s', pStruct %p, pVarData %p, pOut %p, iElement %d, objectID %d, class '%s', unk %p, net %p, edictEnt %p, tick %d",
+		pszWhere, ( pProp != NULL ) ? pProp->GetName() : "?", pStruct, pVarData, pOut, iElement, objectID,
+		pszClass, pUnk, pNet, pEdictEnt, gpGlobals->tickcount );
+
+	Msg( "%s\n", szLine );
 
 	std::ofstream log( "portal_animtime.log", std::ios::app );
 	if ( log.is_open() )
 	{
-		log << "SendProxy_AnimTime: " << pszWhere << ", pStruct " << pStruct
-			<< " (objectID " << objectID << ", class '" << pszClass << "')\n";
+		log << szLine << "\n";
 	}
 }
 
@@ -142,7 +157,7 @@ static void SendProxy_AnimTimeInternal( const SendProp *pProp, const void *pStru
 	// Everything else is caught by the SEH wrapper below.
 	if ( ( (uintptr_t)pStruct >= 0xFFF0000000000000ULL ) || ( (uintptr_t)pStruct < 0x1000ULL ) )
 	{
-		PortalLogBadAnimTime( "invalid pStruct", pStruct, objectID );
+		PortalLogBadAnimTime( "invalid pStruct", pProp, pStruct, pVarData, pOut, iElement, objectID );
 		pOut->m_Int = 0;
 		return;
 	}
@@ -179,7 +194,7 @@ void SendProxy_AnimTime( const SendProp *pProp, const void *pStruct, const void 
 	}
 	__except( EXCEPTION_EXECUTE_HANDLER )
 	{
-		PortalLogBadAnimTime( "access violation", pStruct, objectID );
+		PortalLogBadAnimTime( "access violation", pProp, pStruct, pVarData, pOut, iElement, objectID );
 		pOut->m_Int = 0;
 	}
 #else
