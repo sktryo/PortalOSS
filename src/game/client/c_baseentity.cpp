@@ -311,6 +311,12 @@ int CRecordingList::Count()
 // Should these be somewhere else?
 #define PITCH 0
 
+// PORTAL: The VPC files compile with fopen=dont_use_fopen, so undo that
+// locally; this is a plain diagnostic log, not engine file I/O.
+#ifdef fopen
+#undef fopen
+#endif
+
 //-----------------------------------------------------------------------------
 // Purpose: Decodes animtime and notes when it changes
 // Input  : *pStruct - ( C_BaseEntity * ) used to flag animtime is changine

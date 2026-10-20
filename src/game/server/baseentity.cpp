@@ -105,6 +105,12 @@ ConVar sv_netvisdist( "sv_netvisdist", "10000", FCVAR_CHEAT | FCVAR_DEVELOPMENTO
 
 ConVar sv_script_think_interval("sv_script_think_interval", "0.1");
 
+// PORTAL: The VPC files compile with fopen=dont_use_fopen, so undo that
+// locally; this is a plain diagnostic log, not engine file I/O.
+#ifdef fopen
+#undef fopen
+#endif
+
 // This table encodes edict data.
 // PORTAL: The engine hands us the entity being packed. When a corrupted
 // edict reaches this proxy it faults in the struct/body deref, which kills
