@@ -1604,6 +1604,23 @@ void CHLClient::View_Fade( ScreenFade_t *pSF )
 //-----------------------------------------------------------------------------
 void CHLClient::LevelInitPreEntity( char const* pMapName )
 {
+#ifdef PORTAL
+	// PORTAL: this engine build's local network backdoor (the single-player
+	// loopback fast path) hands a (void*)-1 struct base to send/recv proxies
+	// while copying an entity's partial changes. The first snapshot of the
+	// player entity therefore crashes in SendProxy_FloatToFloat. The backdoor
+	// only skips network serialization for loopback servers, so turning it off
+	// is functionally transparent.
+	if ( ConVar *pBackdoor = ( ConVar * )cvar->FindVar( "cl_localnetworkbackdoor" ) )
+	{
+		if ( pBackdoor->GetInt() != 0 )
+		{
+			pBackdoor->SetValue( 0 );
+			Msg( "PORTAL: disabled cl_localnetworkbackdoor (engine fast path workaround)\n" );
+		}
+	}
+#endif
+
 	ReloadParticleEffects();
 
 	// HACK: Bogus, but the logic is too complicated in the engine

@@ -19,6 +19,7 @@
 #include "cbase.h"
 #include "portal_internal.h"
 #include "tier1/utlvector.h"
+#include <fstream>
 
 #ifdef CLIENT_DLL
 #include "c_prop_portal.h"
@@ -28,6 +29,27 @@
 #include "tier0/memdbgon.h"
 
 bool g_bBulletPortalTrace = false;
+
+//-----------------------------------------------------------------------------
+// Purpose: Diagnostic log for portal placement / lifecycle. -condebug does not
+//			work in this mod, so append to a plain file next to the launcher.
+//-----------------------------------------------------------------------------
+void Portal_DebugLog( const char *pszFormat, ... )
+{
+	char szBuffer[1024];
+	va_list args;
+	va_start( args, pszFormat );
+	Q_vsnprintf( szBuffer, sizeof( szBuffer ), pszFormat, args );
+	va_end( args );
+
+	Msg( "%s\n", szBuffer );
+
+	std::ofstream log( "portal_debug.log", std::ios::app );
+	if ( log.is_open() )
+	{
+		log << szBuffer << "\n";
+	}
+}
 
 static const int		PORTAL_TRACE_MAX_RECURSION = 6;
 static const float		PORTAL_TRACE_EPSILON = 0.25f;

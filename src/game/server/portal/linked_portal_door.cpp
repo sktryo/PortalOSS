@@ -111,6 +111,12 @@ void CLinkedPortalDoor::Spawn( void )
 		m_iPortalType = 0;
 
 	m_vecRestOrigin = GetAbsOrigin();
+
+	Portal_DebugLog( "[portal] linked_portal_door Spawn: name='%s' origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f) portal_type=%d model='%s'",
+		STRING( GetEntityName() ),
+		m_vecRestOrigin.x, m_vecRestOrigin.y, m_vecRestOrigin.z,
+		GetAbsAngles().x, GetAbsAngles().y, GetAbsAngles().z,
+		m_iPortalType, STRING( GetModelName() ) );
 }
 
 //----------------------------------------------------------------------------- 
@@ -137,6 +143,7 @@ void CLinkedPortalDoor::SetState( bool bOpening )
 
 void CLinkedPortalDoor::InputOpen( inputdata_t &inputdata )
 {
+	Portal_DebugLog( "[portal] linked_portal_door '%s' InputOpen", STRING( GetEntityName() ) );
 	SetState( true );
 }
 
@@ -183,6 +190,7 @@ void CLinkedPortalDoor::FinishMove( void )
 	m_bOpen = m_bOpening;
 	if ( m_bOpen )
 	{
+		Portal_DebugLog( "[portal] linked_portal_door '%s' fully open, placing portal", STRING( GetEntityName() ) );
 		PlacePortal();
 		m_OnFullyOpen.FireOutput( this, this );
 	}
@@ -217,6 +225,9 @@ void CLinkedPortalDoor::PlacePortal( void )
 	Vector vecPortalCenter = m_vecRestOrigin + plane.normal * PORTAL_SKIN_LENGTH;
 
 	m_hSpawnedPortal = Portal_PlacePortal( ( PortalType )m_iPortalType, plane, vecPortalCenter );
+
+	Portal_DebugLog( "[portal] linked_portal_door '%s' PlacePortal result=%s", STRING( GetEntityName() ),
+		( m_hSpawnedPortal.Get() != NULL ) ? "ok" : "NULL" );
 }
 
 void CLinkedPortalDoor::RemovePortal( void )

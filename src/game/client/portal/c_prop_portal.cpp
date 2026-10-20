@@ -7,6 +7,7 @@
 
 #include "cbase.h"
 #include "c_prop_portal.h"
+#include "portal_util_shared.h"
 #include "c_te_effect_dispatch.h"
 #include "cdll_client_int.h"
 #include "dlight.h"
@@ -33,6 +34,8 @@ C_Prop_Portal::C_Prop_Portal( void )
 	// The server registers portals when they spawn; the client entity is
 	// created from the network stream, so it has to register itself.
 	CProp_Portal_Shared::AddToAllPortals( this );
+
+	Portal_DebugLog( "[portal] client C_Prop_Portal created (index %d)", CProp_Portal_Shared::AllPortals.Count() - 1 );
 }
 
 C_Prop_Portal::~C_Prop_Portal( void )
@@ -49,6 +52,10 @@ void C_Prop_Portal::OnDataChanged( DataUpdateType_t updateType )
 	// the linked portal's own update will fill them in.
 	UpdatePortalPlaneFromCorners();
 	RecalculatePortalTransforms();
+
+	Portal_DebugLog( "[portal] client portal data: type=%d activated=%d linked=%s corners_valid=%d origin=(%.1f %.1f %.1f)",
+		m_iPortalType, m_bActivated ? 1 : 0, ( m_hLinkedPortal.Get() != NULL ) ? "yes" : "no",
+		HasValidCorners() ? 1 : 0, GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z );
 }
 
 bool C_Prop_Portal::ShouldDraw( void )

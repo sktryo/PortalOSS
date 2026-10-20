@@ -68,6 +68,32 @@ void CProp_Portal::Activate( void )
 {
 	BaseClass::Activate();
 
+	Portal_DebugLog( "[portal] prop_portal Activate: origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f) type=%d corners_valid=%d linkedname='%s'",
+		GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z,
+		GetAbsAngles().x, GetAbsAngles().y, GetAbsAngles().z,
+		GetPortalType(), HasValidCorners() ? 1 : 0, STRING( m_strLinkedPortalName ) );
+
+	// A portal placed directly in the map has no corners yet (only the gun and
+	// the map spawner entities run the placement pipeline). Build the opening
+	// from the entity origin/angles so pre-placed portals are visible and usable.
+	if ( !HasValidCorners() )
+	{
+		Vector vecForward, vecRight, vecUp;
+		AngleVectors( GetAbsAngles(), &vecForward, &vecRight, &vecUp );
+		vecForward.NormalizeInPlace();
+		vecRight.NormalizeInPlace();
+		vecUp.NormalizeInPlace();
+
+		Vector vecCenter = GetAbsOrigin();
+		Vector vBL = vecCenter - vecRight * PORTAL_HALF_WIDTH - vecUp * PORTAL_HALF_HEIGHT;
+		Vector vBR = vecCenter + vecRight * PORTAL_HALF_WIDTH - vecUp * PORTAL_HALF_HEIGHT;
+		Vector vTR = vecCenter + vecRight * PORTAL_HALF_WIDTH + vecUp * PORTAL_HALF_HEIGHT;
+		Vector vTL = vecCenter - vecRight * PORTAL_HALF_WIDTH + vecUp * PORTAL_HALF_HEIGHT;
+		SetupPortalCorners( vBL, vBR, vTR, vTL );
+
+		Portal_DebugLog( "[portal] prop_portal: built corners from origin/angles (map placed)" );
+	}
+
 	// Helper for maps that pre-place portals via .bsp
 	if ( m_strLinkedPortalName != NULL_STRING )
 	{
@@ -348,9 +374,16 @@ bool Portal_RectanglesOverlap( CProp_Portal *pA, CProp_Portal *pB )
 //-----------------------------------------------------------------------------
 CProp_Portal *Portal_PlacePortal( PortalType type, const cplane_t &tracePlane, const Vector &vecPortalCenter )
 {
+	Portal_DebugLog( "[portal] PlacePortal enter: type=%d center=(%.1f %.1f %.1f) normal=(%.2f %.2f %.2f)",
+		(int)type, vecPortalCenter.x, vecPortalCenter.y, vecPortalCenter.z,
+		tracePlane.normal.x, tracePlane.normal.y, tracePlane.normal.z );
+
 	CProp_Portal *pNewPortal = ( CProp_Portal * )CreateEntityByName( "prop_portal" );
 	if ( pNewPortal == NULL )
+	{
+		Portal_DebugLog( "[portal] PlacePortal FAILED: CreateEntityByName( prop_portal ) returned NULL" );
 		return NULL;
+	}
 
 	pNewPortal->SetPortalType( type );
 
@@ -358,6 +391,7 @@ CProp_Portal *Portal_PlacePortal( PortalType type, const cplane_t &tracePlane, c
 	float flNewHeight = 0.0f;
 	if ( !pNewPortal->FindPlacementExtents( vecPortalCenter, tracePlane, flNewWidth, flNewHeight ) )
 	{
+		Portal_DebugLog( "[portal] PlacePortal FAILED: FindPlacementExtents (no room on surface)" );
 		UTIL_Remove( pNewPortal );
 		return NULL;
 	}
@@ -392,6 +426,7 @@ CProp_Portal *Portal_PlacePortal( PortalType type, const cplane_t &tracePlane, c
 											vecRight, vecUp, flNewWidth, flNewHeight,
 											bCenterMoved ) )
 	{
+		Portal_DebugLog( "[portal] PlacePortal FAILED: Portal_AdjustPlacementForVolumes (blocked by func_noportal_volume)" );
 		UTIL_Remove( pNewPortal );
 		return NULL;
 	}
@@ -457,5 +492,10 @@ CProp_Portal *Portal_PlacePortal( PortalType type, const cplane_t &tracePlane, c
 	}
 
 	pNewPortal->Activate();
+
+	Portal_DebugLog( "[portal] PlacePortal OK: type=%d center=(%.1f %.1f %.1f) size=%.1fx%.1f linked=%s",
+		(int)type, vecPlacementCenter.x, vecPlacementCenter.y, vecPlacementCenter.z,
+		flNewWidth, flNewHeight, ( pOtherColorPortal != NULL ) ? "yes" : "no" );
+
 	return pNewPortal;
 }

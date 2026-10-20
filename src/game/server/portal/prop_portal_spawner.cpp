@@ -106,10 +106,22 @@ void CPropPortalSpawner::SpawnPortalInternal( void )
 	}
 
 	if ( pWallTrace == NULL )
+	{
+		Portal_DebugLog( "[portal] prop_portal_spawner '%s' SpawnPortal: no wall trace hit (fwd %.3f bwd %.3f)",
+			STRING( GetEntityName() ), trForward.fraction, trBackward.fraction );
 		return;
+	}
 
 	if ( pWallTrace->surface.flags & ( SURF_NODRAW | SURF_SKY | SURF_SKY2D | SURF_NOPORTAL | SURF_NOLIGHT ) )
+	{
+		Portal_DebugLog( "[portal] prop_portal_spawner '%s' SpawnPortal: surface rejected (flags 0x%x)",
+			STRING( GetEntityName() ), pWallTrace->surface.flags );
 		return;
+	}
+
+	Portal_DebugLog( "[portal] prop_portal_spawner '%s' SpawnPortal: wall hit at (%.1f %.1f %.1f) normal=(%.2f %.2f %.2f)",
+		STRING( GetEntityName() ), pWallTrace->endpos.x, pWallTrace->endpos.y, pWallTrace->endpos.z,
+		pWallTrace->plane.normal.x, pWallTrace->plane.normal.y, pWallTrace->plane.normal.z );
 
 	m_OnPreSpawnedPortal.FireOutput( this, this );
 

@@ -64,6 +64,9 @@ bool UTIL_IsBoxIntersectingPortal( const Vector &vecBoxCenter, const Vector &vec
 // portal placement so the opening's right/up axes are deterministic.
 void UTIL_Portal_GetSurfaceBasis( const Vector &vecNormal, Vector &vecRight, Vector &vecUp );
 
+// Diagnostic log shared by server and client (writes portal_debug.log).
+void Portal_DebugLog( const char *pszFormat, ... );
+
 // Transformation helpers
 void UTIL_Portal_PointTransform( const VMatrix &matThisToLinked, const Vector &ptSource, Vector &ptDest );
 void UTIL_Portal_VectorTransform( const VMatrix &matThisToLinked, const Vector &vecSource, Vector &vecDest );
