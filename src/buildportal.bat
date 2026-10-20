@@ -69,24 +69,28 @@ set "SOLCFG="
 set "SOLCONFIG="
 set "SOLPLATFORM="
 set "SOLCFGLIST=%TEMP%\portal_solution_configs.txt"
-powershell -NoProfile -Command "Select-String -Path 'portal.sln' -Pattern '^\s*[A-Za-z][A-Za-z0-9_]*\s*\|\s*[A-Za-z0-9_ ]+\s*=' | ForEach-Object { ($_.Line -split '=')[0].Trim() } | Select-Object -Unique | Set-Content -Encoding ASCII '%SOLCFGLIST%'" >nul 2>&1
+set "SOLCFGMATCH=%TEMP%\portal_solution_config_match.txt"
+powershell -NoProfile -Command "$c=@(); foreach($m in Select-String -Path 'portal.sln' -Pattern '^[A-Za-z][A-Za-z0-9_ ]*\|[A-Za-z0-9_ ]+ *='){ $c += ($m.Line -split '=')[0].Trim() }; $c | Select-Object -Unique | Set-Content -Encoding ASCII '%SOLCFGLIST%'" >nul 2>&1
 
-if exist "%SOLCFGLIST%" (
-	for /f "usebackq delims=" %%L in ("%SOLCFGLIST%") do (
-		echo %%L | findstr /i /c:"%CONFIG%|" >nul && set "SOLCFG=%%L"
+rem NOTE: never pipe a for-variable that can contain '|' (cmd would treat the
+rem value as a pipeline). Redirect findstr to a file instead.
+findstr /i /c:"%CONFIG%|" "%SOLCFGLIST%" > "%SOLCFGMATCH%" 2>nul
+if exist "%SOLCFGMATCH%" (
+	for /f "usebackq delims=" %%L in ("%SOLCFGMATCH%") do (
+		if not defined SOLCFG set "SOLCFG=%%L"
 	)
-	if not defined SOLCFG (
-		echo [buildportal] Available solution configurations:
-		type "%SOLCFGLIST%"
-	)
-	del "%SOLCFGLIST%" >nul 2>&1
+	del "%SOLCFGMATCH%" >nul 2>&1
 )
 
 if not defined SOLCFG (
+	echo [buildportal] Available solution configurations:
+	type "%SOLCFGLIST%"
 	echo [buildportal] No solution configuration matching "%CONFIG%" was found in portal.sln.
 	echo [buildportal] Regenerate the projects with createportalprojects.bat and retry.
+	del "%SOLCFGLIST%" >nul 2>&1
 	exit /b 1
 )
+del "%SOLCFGLIST%" >nul 2>&1
 
 for /f "tokens=1,2 delims=| " %%A in ("%SOLCFG%") do (
 	set "SOLCONFIG=%%A"
