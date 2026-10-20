@@ -60,12 +60,11 @@ static void Portal_GetPortalFootprintBounds( const Vector &vecCenter, const Vect
 // intersecting the volume is either fizzled (openings on the covered surface)
 // or nudged out of the volume.
 //-----------------------------------------------------------------------------
-class CFuncNoPortalVolume : public CBaseEntity
+class CFuncNoPortalVolume : public CServerOnlyEntity
 {
 public:
-	DECLARE_CLASS( CFuncNoPortalVolume, CBaseEntity );
+	DECLARE_CLASS( CFuncNoPortalVolume, CServerOnlyEntity );
 	DECLARE_DATADESC();
-	DECLARE_SERVERCLASS();
 
 	void Spawn( void );
 	bool IsActive( void ) const { return !m_bDisabled; }
@@ -82,9 +81,6 @@ private:
 };
 
 LINK_ENTITY_TO_CLASS( func_noportal_volume, CFuncNoPortalVolume );
-IMPLEMENT_SERVERCLASS_ST( CFuncNoPortalVolume, DT_FuncNoPortalVolume )
-END_SEND_TABLE()
-
 BEGIN_DATADESC( CFuncNoPortalVolume )
 	DEFINE_KEYFIELD( m_bStartDisabled, FIELD_BOOLEAN, "StartDisabled" ),
 	DEFINE_FIELD( m_bDisabled, FIELD_BOOLEAN ),
@@ -124,12 +120,11 @@ void CFuncNoPortalVolume::InputToggle( inputdata_t &inputdata )
 // Portals whose footprint would touch the volume get nudged so they do not
 // touch it (allows placing portals flush against unportalable surfaces).
 //-----------------------------------------------------------------------------
-class CFuncPortalBumper : public CBaseEntity
+class CFuncPortalBumper : public CServerOnlyEntity
 {
 public:
-	DECLARE_CLASS( CFuncPortalBumper, CBaseEntity );
+	DECLARE_CLASS( CFuncPortalBumper, CServerOnlyEntity );
 	DECLARE_DATADESC();
-	DECLARE_SERVERCLASS();
 
 	void Spawn( void );
 	bool IsActive( void ) const { return !m_bDisabled; }
@@ -146,9 +141,6 @@ private:
 };
 
 LINK_ENTITY_TO_CLASS( func_portal_bumper, CFuncPortalBumper );
-IMPLEMENT_SERVERCLASS_ST( CFuncPortalBumper, DT_FuncPortalBumper )
-END_SEND_TABLE()
-
 BEGIN_DATADESC( CFuncPortalBumper )
 	DEFINE_KEYFIELD( m_bStartDisabled, FIELD_BOOLEAN, "StartDisabled" ),
 	DEFINE_FIELD( m_bDisabled, FIELD_BOOLEAN ),
@@ -188,12 +180,11 @@ void CFuncPortalBumper::InputToggle( inputdata_t &inputdata )
 // Portals placed inside the volume have their bottom edge (bright end) aimed
 // along the AnglesToFace direction.
 //-----------------------------------------------------------------------------
-class CFuncPortalOrientation : public CBaseEntity
+class CFuncPortalOrientation : public CServerOnlyEntity
 {
 public:
-	DECLARE_CLASS( CFuncPortalOrientation, CBaseEntity );
+	DECLARE_CLASS( CFuncPortalOrientation, CServerOnlyEntity );
 	DECLARE_DATADESC();
-	DECLARE_SERVERCLASS();
 
 	void Spawn( void );
 	bool IsActive( void ) const { return !m_bDisabled; }
@@ -212,9 +203,6 @@ private:
 };
 
 LINK_ENTITY_TO_CLASS( func_portal_orientation, CFuncPortalOrientation );
-IMPLEMENT_SERVERCLASS_ST( CFuncPortalOrientation, DT_FuncPortalOrientation )
-END_SEND_TABLE()
-
 BEGIN_DATADESC( CFuncPortalOrientation )
 	DEFINE_KEYFIELD( m_angOrientation, FIELD_VECTOR, "AnglesToFace" ),
 	DEFINE_KEYFIELD( m_bStartDisabled, FIELD_BOOLEAN, "StartDisabled" ),
@@ -256,12 +244,11 @@ void CFuncPortalOrientation::InputToggle( inputdata_t &inputdata )
 // inside the volume. Checked on a fast think rather than on placement events
 // so portals spawned by map entities also register.
 //-----------------------------------------------------------------------------
-class CFuncPortalDetector : public CBaseEntity
+class CFuncPortalDetector : public CServerOnlyEntity
 {
 public:
-	DECLARE_CLASS( CFuncPortalDetector, CBaseEntity );
+	DECLARE_CLASS( CFuncPortalDetector, CServerOnlyEntity );
 	DECLARE_DATADESC();
-	DECLARE_SERVERCLASS();
 
 	void Spawn( void );
 	void Activate( void );
@@ -295,9 +282,6 @@ private:
 };
 
 LINK_ENTITY_TO_CLASS( func_portal_detector, CFuncPortalDetector );
-IMPLEMENT_SERVERCLASS_ST( CFuncPortalDetector, DT_FuncPortalDetector )
-END_SEND_TABLE()
-
 BEGIN_DATADESC( CFuncPortalDetector )
 	DEFINE_KEYFIELD( m_iLinkageGroupID, FIELD_INTEGER, "LinkageGroupID" ),
 	DEFINE_KEYFIELD( m_bStartDisabled, FIELD_BOOLEAN, "StartDisabled" ),
