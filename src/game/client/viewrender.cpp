@@ -2903,7 +2903,10 @@ void CViewRender::ViewDrawScene_PortalStencil( const CViewSetup &viewIn, ViewCus
 		}
 
 		CSimpleWorldView *pClientView = new CSimpleWorldView( this );
-		pClientView->Setup( view, VIEW_CLEAR_OBEY_STENCIL, drawSkybox, fogInfo, waterInfo, pCustomVisibility );
+		// A stencil portal view must clear the colour and depth of the hole
+		// before drawing the exit scene; otherwise the wall we are looking
+		// through stays in the depth buffer and occludes everything.
+		pClientView->Setup( view, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH | VIEW_CLEAR_OBEY_STENCIL, drawSkybox, fogInfo, waterInfo, pCustomVisibility );
 		AddViewToScene( pClientView );
 		SafeRelease( pClientView );
 	}
