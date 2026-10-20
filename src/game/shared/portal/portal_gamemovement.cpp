@@ -114,7 +114,7 @@ CPortalGameMovement::CPortalGameMovement( void )
 //			when no qualifying opening is found.
 //-----------------------------------------------------------------------------
 bool CPortalGameMovement::PickPortalEntry( CBasePlayer *pPlayer, const Vector &vecOrigin, const Vector &vecVelocity,
-										   PORTAL_PTR_TYPE **ppEntry, Vector &vecExitOrigin,
+										   const QAngle &angView, PORTAL_PTR_TYPE **ppEntry, Vector &vecExitOrigin,
 										   Vector &vecExitVelocity, QAngle &angExitView )
 {
 	int iPortalCount = CProp_Portal_Shared::AllPortals.Count();
@@ -205,7 +205,7 @@ bool CPortalGameMovement::PickPortalEntry( CBasePlayer *pPlayer, const Vector &v
 			vecExitVelocity += planeExit.normal * ( PORTAL_EXIT_MIN_NORMAL_SPEED - flExitNormalVelocity );
 		}
 
-		UTIL_Portal_AngleTransform( matThisToLinked, mv->m_vecAngles, angExitView );
+		UTIL_Portal_AngleTransform( matThisToLinked, angView, angExitView );
 
 		if ( ppEntry != NULL )
 			*ppEntry = pPortal;
@@ -281,7 +281,8 @@ void CPortalGameMovement::ProcessMovement( CBasePlayer *pPlayer, CMoveData *pMov
 		Vector vecExitOrigin, vecExitVelocity;
 		QAngle angExitView;
 
-		if ( PickPortalEntry( pPlayer, vecEntryOrigin, vecEntryVelocity, &pEntry, vecExitOrigin, vecExitVelocity, angExitView ) )
+		if ( PickPortalEntry( pPlayer, vecEntryOrigin, vecEntryVelocity, pMove->m_vecAngles,
+							  &pEntry, vecExitOrigin, vecExitVelocity, angExitView ) )
 		{
 			// Teleport first at the start of the tick; the regular move that
 			// follows then carries the player the rest of the way out of the

@@ -32,8 +32,9 @@ public:
 private:
 	// Finds the portal whose opening contains the player and whose surface
 	// the player is moving into; fills in the exit transform when found.
+	// angView is the move data's current (pre-transform) view angles.
 	bool	PickPortalEntry( CBasePlayer *pPlayer, const Vector &vecOrigin, const Vector &vecVelocity,
-							 PORTAL_PTR_TYPE **ppEntry, Vector &vecExitOrigin,
+							 const QAngle &angView, PORTAL_PTR_TYPE **ppEntry, Vector &vecExitOrigin,
 							 Vector &vecExitVelocity, QAngle &angExitView );
 
 	// Applies a traversal: writes the transformed origin/velocity/angles

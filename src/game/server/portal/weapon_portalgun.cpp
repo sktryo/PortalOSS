@@ -136,7 +136,10 @@ static void s_PortalGunDrawBeam( CBasePlayer *pPlayer, const Vector &vecStart,
 							flPortalFraction < tr.fraction &&
 							Portal_SegmentPassesThroughPortal( pEntrance, ray.m_Start, ray.m_Start + ray.m_Delta, flPortalFraction, &vecCrossPoint ) );
 
-	te->BeamPoints( filter, 0.0f, &vecStart, &vecCrossPoint, s_iPortalGunBeamModelIndex,
+	// First segment: from the gun to the crossing point, or to the wall when
+	// the shot did not pass through a portal.
+	Vector vecFirstEnd = bCrossedPortal ? vecCrossPoint : tr.endpos;
+	te->BeamPoints( filter, 0.0f, &vecStart, &vecFirstEnd, s_iPortalGunBeamModelIndex,
 					0, 0, 0, 0.2f, 2.0f, 1.0f, 0, 0.0f, r, g, b, 255, 0 );
 
 	if ( !bCrossedPortal )
