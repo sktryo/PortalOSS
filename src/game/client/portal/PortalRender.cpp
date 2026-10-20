@@ -40,6 +40,13 @@ ConVar portal_render_targets_enabled( "portal_render_targets_enabled", "0", FCVA
 ConVar portal_debug_outline( "portal_debug_outline", "1", FCVAR_CHEAT,
 	"Draw portal opening outlines with the debug overlay." );
 
+// Diagnostic switch for the stencil path:
+//  0 - normal rendering
+//  1 - paint the stencil holes green and skip the deeper view (proves the mask)
+//  2 - draw the opening bright magenta after the deeper view (proves the quad draw)
+ConVar portal_debug_stencil_clear( "portal_debug_stencil_clear", "0", FCVAR_CHEAT,
+	"0=off, 1=paint stencil holes green, 2=draw openings magenta." );
+
 //-----------------------------------------------------------------------------
 CPortalRender *g_pPortalRender = NULL;
 
@@ -279,12 +286,7 @@ static IMaterial *GetPortalSurfaceMaterial( void )
 	return s_pMaterial;
 }
 
-//-----------------------------------------------------------------------------
-// Purpose: draw the opening polygon of a portal into the stencil buffer and
-//			tint the opening so the portal is visible even if the through-view
-//			cannot be rendered.
-//-----------------------------------------------------------------------------
-void CPortalRender::DrawPortalStencilQuad( C_Prop_Portal *pPortal )
+void CPortalRender::DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32 &color )
 {
 	CMatRenderContextPtr pRenderContext( materials );
 
@@ -311,12 +313,6 @@ void CPortalRender::DrawPortalStencilQuad( C_Prop_Portal *pPortal )
 	vecQuad[2] = vTR + vecNudge;
 	vecQuad[3] = vTL + vecNudge;
 
-	color32 color;
-	color.r = ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 40 : 84;
-	color.g = ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 60 : 42;
-	color.b = ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 68 : 8;
-	color.a = 180;
-
 	CMeshBuilder meshBuilder;
 	IMesh *pMesh = pRenderContext->GetDynamicMesh( false, NULL, NULL, pMaterial );
 	meshBuilder.Begin( pMesh, MATERIAL_QUADS, 1 );
@@ -328,6 +324,26 @@ void CPortalRender::DrawPortalStencilQuad( C_Prop_Portal *pPortal )
 		meshBuilder.AdvanceVertex();
 	}
 	meshBuilder.End( true, true );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: draw the opening polygon of a portal into the stencil buffer and
+//			tint the opening so the portal is visible even if the through-view
+//			cannot be rendered.
+//-----------------------------------------------------------------------------
+void CPortalRender::DrawPortalStencilQuad( C_Prop_Portal *pPortal )
+{
+	color32 color;
+	if ( pPortal->m_iPortalType == PORTAL_TYPE_BLUE )
+	{
+		color.r = 0; color.g = 128; color.b = 255; color.a = 255;
+	}
+	else
+	{
+		color.r = 255; color.g = 128; color.b = 0; color.a = 255;
+	}
+
+	DrawPortalQuadColored( pPortal, color );
 }
 
 void CPortalRender::DrawDormantPortalSurface( C_Prop_Portal *pPortal )
@@ -566,6 +582,16 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 		pRenderContext->SetStencilZFailOperation( STENCILOPERATION_KEEP );
 		DrawPortalStencilQuad( pEnterPortal );
 
+		const int iStencilTest = portal_debug_stencil_clear.GetInt();
+		if ( iStencilTest == 1 )
+		{
+			//prove that the opening was marked: paint exactly those pixels
+			pRenderContext->SetStencilReferenceValue( iOldRecursion + 1 );
+			pRenderContext->ClearColor4ub( 0, 255, 0, 255 );
+			pRenderContext->ClearBuffersObeyStencil( true, false );
+			continue;
+		}
+
 		// ---------------------------------------------------------------------
 		// render the deeper scene, confined to the pixels just marked
 		// ---------------------------------------------------------------------
@@ -593,6 +619,15 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 		// ---------------------------------------------------------------------
 		pRenderContext->SetStencilCompareFunction( STENCILCOMPARISONFUNCTION_EQUAL );
 		pRenderContext->SetStencilReferenceValue( iOldRecursion );
+
+		if ( iStencilTest == 2 )
+		{
+			color32 color;
+			color.r = 255; color.g = 0; color.b = 255; color.a = 255;
+			pRenderContext->SetStencilEnable( false );
+			DrawPortalQuadColored( pEnterPortal, color );
+			pRenderContext->SetStencilEnable( true );
+		}
 
 		bDrewPortalView = true;
 	}
