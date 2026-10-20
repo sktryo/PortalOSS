@@ -261,6 +261,11 @@ static IMaterial *GetPortalSurfaceMaterial( void )
 		{
 			s_pMaterial = materials->FindMaterial( "portal/portal_surface", TEXTURE_GROUP_OTHER, false );
 		}
+
+		// The opening quad is drawn with whatever winding the corner order
+		// produces; force two-sided so the stencil mask is always written.
+		if ( s_pMaterial != NULL )
+			s_pMaterial->SetMaterialVarFlag( MATERIAL_VAR_NOCULL, true );
 	}
 
 	if ( !s_bLogged )
@@ -429,7 +434,8 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 			continue;
 
 		Vector vecToPortal = pPortal->GetPortalOrigin() - CurrentViewOrigin();
-		float flDot = DotProduct( pPortal->m_plane_Origin.normal, vecToPortal );
+		//positive when the camera is on the front (normal) side of the opening
+		float flDot = DotProduct( pPortal->m_plane_Origin.normal, -vecToPortal );
 
 		if ( bLogRender )
 		{
@@ -497,7 +503,7 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 			if ( vecToPortal.LengthSqr() > ( PORTAL_MAX_VIEW_DISTANCE * PORTAL_MAX_VIEW_DISTANCE ) )
 				continue;
 
-			if ( DotProduct( pPortal->m_plane_Origin.normal, vecToPortal ) <= 0.0f )
+			if ( DotProduct( pPortal->m_plane_Origin.normal, CurrentViewOrigin() - pPortal->GetPortalOrigin() ) <= 0.0f )
 				continue;
 
 			if ( bLogRender )

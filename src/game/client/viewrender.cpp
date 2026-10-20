@@ -61,6 +61,7 @@
 //#include "C_Portal_Player.h"
 #include "portal_render_targets.h"
 #include "PortalRender.h"
+#include "portal_util_shared.h"
 #endif
 #if defined( HL2_CLIENT_DLL ) || defined( CSTRIKE_DLL ) || defined( TF_CLIENT_DLL )
 #define USE_MONITORS
@@ -2872,6 +2873,20 @@ void CViewRender::ViewDrawScene_PortalStencil( const CViewSetup &viewIn, ViewCus
 
 	WaterRenderInfo_t waterInfo;
 	DetermineWaterRenderInfo( fogInfo, waterInfo );
+
+	//diagnostic: which path the deeper view takes and from where
+	{
+		static float s_flNextPortalViewLog = 0.0f;
+		if ( gpGlobals->curtime >= s_flNextPortalViewLog )
+		{
+			s_flNextPortalViewLog = gpGlobals->curtime + 1.0f;
+			Portal_DebugLog( "[portal] portal view: origin=(%.1f %.1f %.1f) angles=(%.1f %.1f %.1f) rec=%d cheapwater=%d infog=%d drawsky=%d",
+				view.origin.x, view.origin.y, view.origin.z,
+				view.angles.x, view.angles.y, view.angles.z,
+				iRecursionLevel, waterInfo.m_bCheapWater ? 1 : 0,
+				fogInfo.m_bEyeInFogVolume ? 1 : 0, drawSkybox ? 1 : 0 );
+		}
+	}
 
 	if ( waterInfo.m_bCheapWater )
 	{		     
