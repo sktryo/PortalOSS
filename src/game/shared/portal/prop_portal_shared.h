@@ -136,6 +136,19 @@ private:
 	string_t				m_strLinkedPortalName;
 };
 
+//-----------------------------------------------------------------------------
+// Server portal placement helpers
+//-----------------------------------------------------------------------------
+// Shared placement path used by the portal gun and map spawner entities:
+// creates a prop_portal on the given surface point, fizzles the previous
+// portal of the same color and overlapping other-color portals, and links it
+// to the other color whenever that portal exists. Returns the new portal or
+// NULL when the placement failed.
+CProp_Portal *Portal_PlacePortal( PortalType type, const cplane_t &tracePlane, const Vector &vecPortalCenter );
+
+// Do the two portals share their wall face and overlap in-plane?
+bool Portal_RectanglesOverlap( CProp_Portal *pA, CProp_Portal *pB );
+
 #endif // !defined( CLIENT_DLL )
 
 #endif // PROP_PORTAL_SHARED_H

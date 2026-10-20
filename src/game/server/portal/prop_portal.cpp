@@ -177,6 +177,9 @@ void CProp_Portal::SetupPortalCorners( const Vector &vBottomLeft, const Vector &
 	RecalculatePortalTransforms();
 }
 
+// Near, into-wall trace used when an emitted portal needs its host wall
+#define PORTAL_SPAWNER_TRACE_DIST			96.0f
+
 //-----------------------------------------------------------------------------
 // Purpose: How much space is there for a portal at this location? Traces out
 //			in the plane around the portal center and clips the requested half
@@ -297,4 +300,120 @@ bool CProp_Portal::IsTouchingPortal( const Vector &vecCenter, const Vector &vecE
 		return false;
 
 	return UTIL_IsBoxIntersectingPortal( vecCenter, vecExtents, this );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Do the two portals' openings sit on the same part of the same wall?
+//			Portals sharing a plane and overlapping in-plane cannot coexist.
+//-----------------------------------------------------------------------------
+bool Portal_RectanglesOverlap( CProp_Portal *pA, CProp_Portal *pB )
+{
+	if ( pA == NULL || pB == NULL )
+		return false;
+
+	// A different face is never overlapping
+	if ( DotProduct( pA->GetPortalNormal(), pB->GetPortalNormal() ) < 0.9f )
+		return false;
+
+	// Different plane offsets are separated along the normal
+	float flPlaneDelta = fabs( DotProduct( pA->GetPortalNormal(), pB->GetPortalOrigin() ) - pA->m_plane_Origin.dist );
+	if ( flPlaneDelta > 8.0f )
+		return false;
+
+	// Axis-aligned overlap test on the world bounds of the corners
+	Vector vecMinA, vecMaxA, vecMinB, vecMaxB;
+	ClearBounds( vecMinA, vecMaxA );
+	ClearBounds( vecMinB, vecMaxB );
+	for ( int i = 0; i < 4; ++i )
+	{
+		AddPointToBounds( pA->m_vPortalCorners[i], vecMinA, vecMaxA );
+		AddPointToBounds( pB->m_vPortalCorners[i], vecMinB, vecMaxB );
+	}
+
+	if ( vecMinA.x > vecMaxB.x || vecMinB.x > vecMaxA.x ||
+		 vecMinA.y > vecMaxB.y || vecMinB.y > vecMaxA.y ||
+		 vecMinA.z > vecMaxB.z || vecMinB.z > vecMaxA.z )
+		return false;
+
+	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Shared server-side portal placement: creates a prop_portal of the
+//			given type centered on the given surface point, fizzles the
+//			previous portal of the same color and overlapping other-color
+//			portals, and links the new portal to the other color when
+//			present. Used by both the portal gun and map spawner entities.
+//-----------------------------------------------------------------------------
+CProp_Portal *Portal_PlacePortal( PortalType type, const cplane_t &tracePlane, const Vector &vecPortalCenter )
+{
+	CProp_Portal *pNewPortal = ( CProp_Portal * )CreateEntityByName( "prop_portal" );
+	if ( pNewPortal == NULL )
+		return NULL;
+
+	pNewPortal->SetPortalType( type );
+
+	float flNewWidth = 0.0f;
+	float flNewHeight = 0.0f;
+	if ( !pNewPortal->FindPlacementExtents( vecPortalCenter, tracePlane, flNewWidth, flNewHeight ) )
+	{
+		UTIL_Remove( pNewPortal );
+		return NULL;
+	}
+
+	// Direction frame for the portal opening
+	Vector vecRight, vecUp;
+	UTIL_Portal_GetSurfaceBasis( tracePlane.normal, vecRight, vecUp );
+
+	Vector vLeftBottom = vecPortalCenter - vecRight * flNewWidth - vecUp * flNewHeight;
+	Vector vRightBottom = vecPortalCenter + vecRight * flNewWidth - vecUp * flNewHeight;
+	Vector vRightTop = vecPortalCenter + vecRight * flNewWidth + vecUp * flNewHeight;
+	Vector vLeftTop = vecPortalCenter - vecRight * flNewWidth + vecUp * flNewHeight;
+
+	pNewPortal->Spawn();
+	pNewPortal->SetupPortalCorners( vLeftBottom, vRightBottom, vRightTop, vLeftTop );
+
+	// Find any previous portal of the same color (kill it) and the other color
+	// portal for linking
+	CProp_Portal *pOtherColorPortal = NULL;
+	int iPortalCount = CProp_Portal_Shared::AllPortals.Count();
+	for ( int i = iPortalCount - 1; i >= 0; --i )
+	{
+		CProp_Portal *pPortal = CProp_Portal_Shared::AllPortals.Element( i );
+		if ( pPortal == NULL || pPortal == pNewPortal )
+			continue;
+
+		// Remove any previous portal of the same color, whether it is still
+		// linked or not. Otherwise a stale, dormant portal would survive.
+		if ( pPortal->GetPortalType() == type )
+		{
+			pPortal->Fizzle( PORTAL_FIZZLE_KILLED );
+			continue;
+		}
+
+		// Remember the other color portal to link against. An unlinked
+		// (dormant) portal is still a valid link target: this is what makes
+		// the first pair of portals active.
+		if ( ( ( type == PORTAL_TYPE_BLUE ) && ( pPortal->GetPortalType() == PORTAL_TYPE_ORANGE ) ) ||
+			 ( ( type == PORTAL_TYPE_ORANGE ) && ( pPortal->GetPortalType() == PORTAL_TYPE_BLUE ) ) )
+		{
+			// The other color portal cannot survive the new portal covering
+			// the same spot: fizzle it and keep looking for a link target.
+			if ( Portal_RectanglesOverlap( pNewPortal, pPortal ) )
+			{
+				pPortal->Fizzle( PORTAL_FIZZLE_KILLED );
+				continue;
+			}
+
+			pOtherColorPortal = pPortal;
+		}
+	}
+
+	if ( pOtherColorPortal != NULL )
+	{
+		pNewPortal->LinkPortal( pOtherColorPortal );
+	}
+
+	pNewPortal->Activate();
+	return pNewPortal;
 }

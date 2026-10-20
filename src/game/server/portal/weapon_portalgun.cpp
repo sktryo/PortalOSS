@@ -31,42 +31,6 @@ static int s_iPortalGunBeamModelIndex = 0;
 LINK_ENTITY_TO_CLASS( weapon_portalgun, CWeaponPortalGun );
 PRECACHE_WEAPON_REGISTER( weapon_portalgun );
 
-//-----------------------------------------------------------------------------
-// Purpose: Do the two portals' openings sit on the same part of the same wall?
-//			Portals sharing a plane and overlapping in-plane cannot coexist.
-//-----------------------------------------------------------------------------
-static bool s_PortalRectanglesOverlap( CProp_Portal *pA, CProp_Portal *pB )
-{
-	if ( pA == NULL || pB == NULL )
-		return false;
-
-	// A different face is never overlapping
-	if ( DotProduct( pA->GetPortalNormal(), pB->GetPortalNormal() ) < 0.9f )
-		return false;
-
-	// Different plane offsets are separated along the normal
-	float flPlaneDelta = fabs( DotProduct( pA->GetPortalNormal(), pB->GetPortalOrigin() ) - pA->m_plane_Origin.dist );
-	if ( flPlaneDelta > 8.0f )
-		return false;
-
-	// Axis-aligned overlap test on the world bounds of the corners
-	Vector vecMinA, vecMaxA, vecMinB, vecMaxB;
-	ClearBounds( vecMinA, vecMaxA );
-	ClearBounds( vecMinB, vecMaxB );
-	for ( int i = 0; i < 4; ++i )
-	{
-		AddPointToBounds( pA->m_vPortalCorners[i], vecMinA, vecMaxA );
-		AddPointToBounds( pB->m_vPortalCorners[i], vecMinB, vecMaxB );
-	}
-
-	if ( vecMinA.x > vecMaxB.x || vecMinB.x > vecMaxA.x ||
-		 vecMinA.y > vecMaxB.y || vecMinB.y > vecMaxA.y ||
-		 vecMinA.z > vecMaxB.z || vecMinB.z > vecMaxA.z )
-		return false;
-
-	return true;
-}
-
 IMPLEMENT_SERVERCLASS_ST( CWeaponPortalBase, DT_WeaponPortalBase )
 END_SEND_TABLE()
 
@@ -226,73 +190,8 @@ bool CWeaponPortalGun::FirePortal( PortalType type )
 	// The placement origin sits just outside the wall face
 	Vector vecPortalCenter = tr.endpos + tr.plane.normal * PORTAL_SKIN_LENGTH;
 
-	CProp_Portal *pNewPortal = ( CProp_Portal * )CreateEntityByName( "prop_portal" );
-	if ( pNewPortal == NULL )
+	if ( Portal_PlacePortal( type, tr.plane, vecPortalCenter ) == NULL )
 		return false;
 
-	pNewPortal->SetPortalType( type );
-
-	float flNewWidth = 0.0f;
-	float flNewHeight = 0.0f;
-	if ( !pNewPortal->FindPlacementExtents( vecPortalCenter, tr.plane, flNewWidth, flNewHeight ) )
-	{
-		UTIL_Remove( pNewPortal );
-		return false;
-	}
-
-	// Direction frame for the portal opening
-	Vector vecRight, vecUp;
-	UTIL_Portal_GetSurfaceBasis( tr.plane.normal, vecRight, vecUp );
-
-	Vector vLeftBottom = vecPortalCenter - vecRight * flNewWidth - vecUp * flNewHeight;
-	Vector vRightBottom = vecPortalCenter + vecRight * flNewWidth - vecUp * flNewHeight;
-	Vector vRightTop = vecPortalCenter + vecRight * flNewWidth + vecUp * flNewHeight;
-	Vector vLeftTop = vecPortalCenter - vecRight * flNewWidth + vecUp * flNewHeight;
-
-	pNewPortal->Spawn();
-	pNewPortal->SetupPortalCorners( vLeftBottom, vRightBottom, vRightTop, vLeftTop );
-
-	// Find any previous portal of the same color (kill it) and the other color
-	// portal for linking
-	CProp_Portal *pOtherColorPortal = NULL;
-	int iPortalCount = CProp_Portal_Shared::AllPortals.Count();
-	for ( int i = iPortalCount - 1; i >= 0; --i )
-	{
-		CProp_Portal *pPortal = CProp_Portal_Shared::AllPortals.Element( i );
-		if ( pPortal == NULL || pPortal == pNewPortal )
-			continue;
-
-		// Remove any previous portal of the same color, whether it is still
-		// linked or not. Otherwise a stale, dormant portal would survive.
-		if ( pPortal->GetPortalType() == type )
-		{
-			pPortal->Fizzle( PORTAL_FIZZLE_KILLED );
-			continue;
-		}
-
-		// Remember the other color portal to link against. An unlinked
-		// (dormant) portal is still a valid link target: this is what makes
-		// the first pair of portals active.
-		if ( ( ( type == PORTAL_TYPE_BLUE ) && ( pPortal->GetPortalType() == PORTAL_TYPE_ORANGE ) ) ||
-			 ( ( type == PORTAL_TYPE_ORANGE ) && ( pPortal->GetPortalType() == PORTAL_TYPE_BLUE ) ) )
-		{
-			// The other color portal cannot survive the new portal covering
-			// the same spot: fizzle it and keep looking for a link target.
-			if ( s_PortalRectanglesOverlap( pNewPortal, pPortal ) )
-			{
-				pPortal->Fizzle( PORTAL_FIZZLE_KILLED );
-				continue;
-			}
-
-			pOtherColorPortal = pPortal;
-		}
-	}
-
-	if ( pOtherColorPortal != NULL )
-	{
-		pNewPortal->LinkPortal( pOtherColorPortal );
-	}
-
-	pNewPortal->Activate();
 	return true;
 }
