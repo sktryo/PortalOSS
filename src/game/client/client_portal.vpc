@@ -29,6 +29,7 @@ $Project "Client (Portal)"
 
 		$Folder	"Portal DLL"
 		{
+			$File	"$SRCDIR\game\shared\portal\portal_ammodef.cpp"
 			$File	"$SRCDIR\game\shared\portal\portal_gamemovement.cpp"
 			$File	"$SRCDIR\game\shared\portal\portal_gamemovement.h"
 			$File	"$SRCDIR\game\shared\portal\portal_internal.h"

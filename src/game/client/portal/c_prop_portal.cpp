@@ -15,9 +15,9 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
-LINK_ENTITY_TO_CLASS( prop_portal, C_Prop_Portal );
-
-BEGIN_RECV_TABLE( C_Prop_Portal, DT_Prop_Portal )
+// The client-side network class for prop_portal. The DT name must match the
+// server's DT_Prop_Portal send table (prop_portal.cpp).
+IMPLEMENT_CLIENTCLASS_DT( C_Prop_Portal, DT_Prop_Portal, CProp_Portal )
 	RecvPropBool( RECVINFO( m_bActivated ) ),
 	RecvPropInt( RECVINFO( m_iPortalType ) ),
 	RecvPropEHandle( RECVINFO( m_hLinkedPortal ) ),
