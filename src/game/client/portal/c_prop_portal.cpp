@@ -7,6 +7,10 @@
 
 #include "cbase.h"
 #include "c_prop_portal.h"
+#include "c_te_effect_dispatch.h"
+#include "cdll_client_int.h"
+#include "dlight.h"
+#include "iefx.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -52,6 +56,38 @@ bool C_Prop_Portal::ShouldDraw( void )
 	// Nothing to draw until the corner data has arrived from the server.
 	return HasValidCorners() && BaseClass::ShouldDraw();
 }
+
+//-----------------------------------------------------------------------------
+// Purpose: Client-side "PortalFizzle" effect callback. The fizzling portal
+//			flashes briefly with a light in the portal's color; the fizzle
+//			sound comes from the server entity.
+//-----------------------------------------------------------------------------
+static void PortalFizzle_Callback( const CEffectData &data )
+{
+	dlight_t *dl = effects->CL_AllocDlight( 0 );
+	if ( dl == NULL )
+		return;
+
+	dl->origin = data.m_vOrigin;
+	dl->radius = 96.0f;
+	dl->decay = 220.0f;
+	dl->die = gpGlobals->curtime + 0.35f;
+
+	// m_nColor carries the portal color (0 = blue, 1 = orange)
+	if ( data.m_nColor == 1 )
+	{
+		dl->color.r = 255;
+		dl->color.g = 160;
+		dl->color.b = 0;
+	}
+	else
+	{
+		dl->color.r = 0;
+		dl->color.g = 160;
+		dl->color.b = 255;
+	}
+}
+DECLARE_CLIENT_EFFECT( "PortalFizzle", PortalFizzle_Callback );
 
 C_Prop_Portal *UTIL_Portal_TraceRay_Beam( const Ray_t &rayBeam, unsigned int mask, ITraceFilter *pTraceFilter, float *fEndFraction )
 {

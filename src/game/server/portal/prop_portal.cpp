@@ -252,6 +252,7 @@ void CProp_Portal::DoFizzleEffect( PortalFizzleType_t fizzleType, bool bFailedTo
 	data.m_vOrigin = GetPortalOrigin();
 	data.m_vNormal = GetPortalNormal();
 	data.m_nDamageType = fizzleType;
+	data.m_nColor = ( GetPortalType() == PORTAL_TYPE_ORANGE ) ? 1 : 0;
 	data.m_fFlags = bFailedToOpenPortal ? 1 : 0;
 	DispatchEffect( "PortalFizzle", data );
 }
