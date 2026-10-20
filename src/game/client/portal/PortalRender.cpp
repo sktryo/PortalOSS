@@ -19,6 +19,7 @@
 #include "view.h"
 #include "cdll_client_int.h"
 #include "materialsystem/imesh.h"
+#include "tier2/tier2.h"
 #include "c_baseplayer.h"
 #include "KeyValues.h"
 #include "engine/ivdebugoverlay.h"
@@ -46,6 +47,11 @@ ConVar portal_debug_outline( "portal_debug_outline", "1", FCVAR_CHEAT,
 //  2 - draw the opening bright magenta after the deeper view (proves the quad draw)
 ConVar portal_debug_stencil_clear( "portal_debug_stencil_clear", "0", FCVAR_CHEAT,
 	"0=off, 1=paint stencil holes green, 2=draw openings magenta." );
+
+// Draws the opening material as a screen-space rectangle, proving the material
+// itself rasterises independently of the world-space mesh path.
+ConVar portal_debug_screen_quad( "portal_debug_screen_quad", "0", FCVAR_CHEAT,
+	"Draw the portal opening material as a screen-space rectangle." );
 
 //-----------------------------------------------------------------------------
 CPortalRender *g_pPortalRender = NULL;
@@ -249,6 +255,12 @@ void CPortalRender::HandlePortalPlaybackMessage( KeyValues *pKeyValues )
 //			provides debug/debugvertexcolor, but this mod only mounts the SDK
 //			platform + Portal content, so fall back to a material we ship.
 //-----------------------------------------------------------------------------
+// 0 = auto (debug/debugvertexcolor, falling back to the mod material)
+// 1 = force the mod-shipped portal/portal_surface material
+// 2 = force debug/debugvertexcolor without the NOCULL override
+ConVar portal_debug_surface_mat( "portal_debug_surface_mat", "0", FCVAR_CHEAT,
+	"Select the portal opening material for diagnostics." );
+
 static IMaterial *GetPortalSurfaceMaterial( void )
 {
 	static IMaterial *s_pMaterial = NULL;
@@ -259,28 +271,32 @@ static IMaterial *GetPortalSurfaceMaterial( void )
 	{
 		s_bResolved = true;
 
-		IMaterial *pDebug = materials->FindMaterial( "debug/debugvertexcolor", TEXTURE_GROUP_OTHER, false );
-		if ( pDebug != NULL && !pDebug->IsErrorMaterial() )
-		{
-			s_pMaterial = pDebug;
-		}
-		else
-		{
-			s_pMaterial = materials->FindMaterial( "portal/portal_surface", TEXTURE_GROUP_OTHER, false );
-		}
+		const char *pName = "debug/debugvertexcolor";
+		if ( portal_debug_surface_mat.GetInt() == 1 )
+			pName = "portal/portal_surface";
 
-		// The opening quad is drawn with whatever winding the corner order
-		// produces; force two-sided so the stencil mask is always written.
-		if ( s_pMaterial != NULL )
-			s_pMaterial->SetMaterialVarFlag( MATERIAL_VAR_NOCULL, true );
+		IMaterial *pMat = materials->FindMaterial( pName, TEXTURE_GROUP_OTHER, false );
+		if ( pMat == NULL || pMat->IsErrorMaterial() )
+			pMat = materials->FindMaterial( "portal/portal_surface", TEXTURE_GROUP_OTHER, false );
+
+		if ( pMat != NULL && !pMat->IsErrorMaterial() )
+		{
+			s_pMaterial = pMat;
+
+			// The opening quad is drawn with whatever winding the corner order
+			// produces; force two-sided so the stencil mask is always written.
+			if ( portal_debug_surface_mat.GetInt() != 2 )
+				s_pMaterial->SetMaterialVarFlag( MATERIAL_VAR_NOCULL, true );
+		}
 	}
 
 	if ( !s_bLogged )
 	{
 		s_bLogged = true;
-		Portal_DebugLog( "[portal] surface material: '%s'%s",
+		Portal_DebugLog( "[portal] surface material: '%s' stencil_buffer=%d stencil_bits=%d",
 			( s_pMaterial != NULL ) ? s_pMaterial->GetName() : "(null)",
-			( s_pMaterial == NULL || s_pMaterial->IsErrorMaterial() ) ? " [MISSING/error]" : "" );
+			g_pMaterialSystemHardwareConfig->HasStencilBuffer() ? 1 : 0,
+			g_pMaterialSystemHardwareConfig->StencilBufferBits() );
 	}
 
 	return s_pMaterial;
@@ -428,6 +444,15 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 	//recursion depth exhausted, the current view renders normally
 	if ( m_iViewRecursionLevel >= MAX_PORTAL_RECURSIVE_VIEWS )
 		return false;
+
+	if ( portal_debug_screen_quad.GetBool() && m_iViewRecursionLevel == 0 )
+	{
+		CMatRenderContextPtr pRenderContext( materials );
+		IMaterial *pMaterial = GetPortalSurfaceMaterial();
+		if ( pMaterial != NULL )
+			pRenderContext->DrawScreenSpaceRectangle( pMaterial, 100, 100, 200, 200,
+				0.0f, 0.0f, 1.0f, 1.0f, 200, 200 );
+	}
 
 	//collect the portals that can be seen from here
 	CUtlVector<C_Prop_Portal *> visiblePortals;

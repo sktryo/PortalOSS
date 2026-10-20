@@ -2906,6 +2906,15 @@ void CViewRender::ViewDrawScene_PortalStencil( const CViewSetup &viewIn, ViewCus
 		// A stencil portal view must clear the colour and depth of the hole
 		// before drawing the exit scene; otherwise the wall we are looking
 		// through stays in the depth buffer and occludes everything.
+		// CSimpleWorldView never pushes a view with its clear flags, so the
+		// clear has to happen here.
+		if ( g_pMaterialSystemHardwareConfig->HasStencilBuffer() )
+		{
+			CMatRenderContextPtr pRenderContext( materials );
+			pRenderContext->SetStencilCompareFunction( STENCILCOMPARISONFUNCTION_EQUAL );
+			pRenderContext->SetStencilReferenceValue( iRecursionLevel );
+			pRenderContext->ClearBuffersObeyStencil( true, true );
+		}
 		pClientView->Setup( view, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH | VIEW_CLEAR_OBEY_STENCIL, drawSkybox, fogInfo, waterInfo, pCustomVisibility );
 		AddViewToScene( pClientView );
 		SafeRelease( pClientView );
