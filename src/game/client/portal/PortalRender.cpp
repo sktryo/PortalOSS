@@ -35,6 +35,13 @@
 ConVar portal_render_targets_enabled( "portal_render_targets_enabled", "0", FCVAR_CHEAT,
 	"Enable rendering of through-portal views to the _rt_Portal1/_rt_Portal2 render targets." );
 
+// Selects how through-portal views are produced:
+//  0 - stencil hole rendering (recursive, in-framebuffer)
+//  1 - render the exit scene to a render target and composite it onto the
+//      portal opening (the classic, movement-stable Portal technique)
+ConVar portal_rt_mode( "portal_rt_mode", "1", FCVAR_CHEAT,
+	"0 = stencil through-views, 1 = render-target through-views." );
+
 // Temporary visual aid: draws the opening's outline and normal with the debug
 // overlay so the geometry can be verified even if the portal surfaces do not
 // rasterise yet.
@@ -82,6 +89,10 @@ CPortalRender::CPortalRender( void )
 	m_bPortalViewTargetsCreated = false;
 	m_pExitPortal = NULL;
 	m_vecExitPortalFogOrigin = vec3_origin;
+	m_pPortalRTMaterial[0] = NULL;
+	m_pPortalRTMaterial[1] = NULL;
+	m_pPortalRTBaseTex[0] = NULL;
+	m_pPortalRTBaseTex[1] = NULL;
 }
 
 //-----------------------------------------------------------------------------
@@ -618,6 +629,16 @@ bool CPortalRender::DrawPortalsUsingStencils( CViewRender *pMainView )
 	if ( bLogRender )
 		Portal_DebugLog( "[portal] render: drawing %d portal view(s)", visiblePortals.Count() );
 
+	// Render-target based through-views: render the exit scene into _rt_PortalN
+	// and composite it onto the opening. This path has no recursive depth/stencil
+	// coupling with the main scene, so it stays stable as the camera moves.
+	if ( portal_rt_mode.GetInt() != 0 )
+	{
+		if ( bLogRender )
+			Portal_DebugLog( "[portal] render: using render-target through-views" );
+		return DrawPortalViewTargets( pMainView, visiblePortals );
+	}
+
 	CMatRenderContextPtr pRenderContext( materials );
 
 	//start each frame's outermost view with a fresh stencil buffer
@@ -798,6 +819,190 @@ bool CPortalRender::DrawPortalsToTextures( CViewRender *pMainView, const CViewSe
 	}
 
 	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: render-target based through-portal rendering. For every visible
+//			portal, render the exit scene (from the transform of the local
+//			camera through the portal) into a render target, then composite
+//			that RT onto the opening as a textured world-space quad whose UVs
+//			are the exit camera's projection of each opening corner. This is the
+//			classic Portal technique and, unlike the stencil in-framebuffer
+//			path, it has no per-frame depth/stencil coupling with the main
+//			scene, so it stays stable while the camera moves.
+// Return : true if any portal's through-view was composited
+//-----------------------------------------------------------------------------
+bool CPortalRender::DrawPortalViewTargets( CViewRender *pMainView, CUtlVector<C_Prop_Portal *> &visiblePortals )
+{
+	VPROF_BUDGET( "CPortalRender::DrawPortalViewTargets", "MainViewPortals" );
+
+	if ( !pMainView )
+		return false;
+
+	//create/refresh the portal view render targets if needed
+	if ( m_bPortalViewTargetsCreated == false )
+	{
+		m_bPortalViewTargetsCreated = true;
+		m_pPortalViewTextures[0].Init( materials->CreateNamedRenderTargetTextureEx2(
+			"_rt_Portal1", 256, 256, RT_SIZE_PICMIP,
+			materials->GetBackBufferFormat(), MATERIAL_RT_DEPTH_SHARED,
+			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT, 0 ) );
+		m_pPortalViewTextures[1].Init( materials->CreateNamedRenderTargetTextureEx2(
+			"_rt_Portal2", 256, 256, RT_SIZE_PICMIP,
+			materials->GetBackBufferFormat(), MATERIAL_RT_DEPTH_SHARED,
+			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT, 0 ) );
+	}
+
+	bool bDrewAny = false;
+
+	for ( int i = 0; i < visiblePortals.Count() && i < 2; ++i )
+	{
+		C_Prop_Portal *pEnterPortal = visiblePortals[i];
+		C_Prop_Portal *pExitPortal = pEnterPortal->m_hLinkedPortal;
+		if ( pExitPortal == NULL )
+			continue;
+
+		int iSlot = ( pEnterPortal->m_iPortalType == PORTAL_TYPE_BLUE ) ? 0 : 1;
+		if ( m_pPortalViewTextures[iSlot] == NULL )
+			continue;
+
+		//build the virtual view through the enter portal
+		CViewSetup portalView;
+		BuildPortalView( pEnterPortal, pMainView, portalView );
+		portalView.x = 0;
+		portalView.y = 0;
+		portalView.width = 256;
+		portalView.height = 256;
+
+		//render the exit scene into the per-slot render target and, while the
+		//exit camera is current, capture its actual view+projection matrices
+		//(the very ones ViewDrawScene uses to fill the RT) so the opening quad
+		//is textured with exactly the image that camera produced. Copied by
+		//value because the render context matrices change once we pop the view.
+		render->Push3DView( portalView, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH, m_pPortalViewTextures[iSlot], pMainView->GetFrustum() );
+
+		VMatrix matView, matProj;
+		{
+			CMatRenderContextPtr pRTContext( materials );
+			pRTContext->GetMatrix( MATERIAL_VIEW, &matView );
+			pRTContext->GetMatrix( MATERIAL_PROJECTION, &matProj );
+		}
+
+		pMainView->ViewDrawScene( false, SKYBOX_NOT_VISIBLE, portalView, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH, VIEW_MONITOR );
+		render->PopView( pMainView->GetFrustum() );
+
+		VMatrix matWorldToClip;
+		MatrixMultiply( matProj, matView, matWorldToClip );	// clip = proj * view * world
+
+		DrawPortalRTThroughQuad( pEnterPortal, matWorldToClip );
+		bDrewAny = true;
+	}
+
+	return bDrewAny;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: draw a world-space quad at the enter portal's opening, textured with
+//			the exit render target. Each opening corner's UV is that corner's
+//			projection through the exit camera (matWorldToClip is the exit view's
+//			combined world->clip), which places the exit image perspective-correctly.
+//-----------------------------------------------------------------------------
+void CPortalRender::DrawPortalRTThroughQuad( C_Prop_Portal *pPortal, const VMatrix &matWorldToClip )
+{
+	CMatRenderContextPtr pRenderContext( materials );
+
+	IMaterial *pMaterial = GetPortalRTMaterial( pPortal->m_iPortalType );
+	if ( pMaterial == NULL )
+		return;
+
+	pRenderContext->Bind( pMaterial );
+
+	//nudge the opening off the wall toward the camera to avoid z-fighting
+	Vector vecNudge = pPortal->m_plane_Origin.normal;
+	if ( DotProduct( CurrentViewOrigin() - pPortal->GetPortalOrigin(), vecNudge ) < 0.0f )
+		vecNudge.Negate();
+	vecNudge *= 0.5f;
+
+	const Vector &vBL = pPortal->m_vPortalCorners[0];
+	const Vector &vBR = pPortal->m_vPortalCorners[1];
+	const Vector &vTR = pPortal->m_vPortalCorners[2];
+	const Vector &vTL = pPortal->m_vPortalCorners[3];
+
+	Vector vecQuad[4];
+	vecQuad[0] = vBL + vecNudge;
+	vecQuad[1] = vBR + vecNudge;
+	vecQuad[2] = vTR + vecNudge;
+	vecQuad[3] = vTL + vecNudge;
+
+	//compute each corner's UV by projecting it through the exit camera
+	Vector2D vecUV[4];
+	for ( int c = 0; c < 4; ++c )
+	{
+		Vector4D world( vecQuad[c].x, vecQuad[c].y, vecQuad[c].z, 1.0f );
+		Vector4D clip;
+		matWorldToClip.V4Mul( world, clip );
+		float flW = clip.w;
+		if ( fabsf( flW ) < 0.0001f )
+			flW = 0.0001f;
+		float flNdcX = clip.x / flW;
+		float flNdcY = clip.y / flW;
+		vecUV[c].x = ( flNdcX + 1.0f ) * 0.5f;
+		vecUV[c].y = ( 1.0f - flNdcY ) * 0.5f;	// flip Y: NDC up -> texture top
+	}
+
+	//texture winding may be flipped; keep two-sided so the quad always draws
+	pMaterial->SetMaterialVarFlag( MATERIAL_VAR_NOCULL, true );
+
+	IMesh *pMesh = pRenderContext->GetDynamicMesh();
+	if ( pMesh == NULL )
+		return;
+
+	CMeshBuilder meshBuilder;
+	meshBuilder.Begin( pMesh, MATERIAL_QUADS, 1 );
+	for ( int i = 0; i < 4; ++i )
+	{
+		meshBuilder.Position3fv( vecQuad[i].Base() );
+		meshBuilder.Color4ub( 255, 255, 255, 255 );
+		meshBuilder.TexCoord2f( 0, vecUV[i].x, vecUV[i].y );
+		meshBuilder.AdvanceVertex();
+	}
+	meshBuilder.End();
+	pMesh->Draw();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: return (and lazily create) the material used to composite a portal
+//			render target onto an opening. Kept per-colour so both portals can
+//			show through simultaneously.
+//-----------------------------------------------------------------------------
+IMaterial *CPortalRender::GetPortalRTMaterial( int iPortalType )
+{
+	int iSlot = ( iPortalType == PORTAL_TYPE_BLUE ) ? 0 : 1;
+
+	if ( m_pPortalRTMaterial[iSlot] == NULL )
+	{
+		KeyValues *pKV = new KeyValues( "UnlitGeneric" );
+		pKV->SetInt( "$vertexcolor", 1 );
+		pKV->SetInt( "$nocull", 1 );
+
+		char szName[] = "portal/portal_rt_0";
+		szName[ sizeof( szName ) - 2 ] = ( iSlot == 0 ) ? '1' : '2';
+		m_pPortalRTMaterial[iSlot] = materials->CreateMaterial( szName, pKV );
+
+		if ( m_pPortalRTMaterial[iSlot] != NULL )
+		{
+			m_pPortalRTBaseTex[iSlot] = m_pPortalRTMaterial[iSlot]->FindVar( "$basetexture", NULL );
+		}
+	}
+
+	if ( m_pPortalRTMaterial[iSlot] != NULL &&
+		 m_pPortalRTBaseTex[iSlot] != NULL &&
+		 m_pPortalViewTextures[iSlot] != NULL )
+	{
+		m_pPortalRTBaseTex[iSlot]->SetTextureValue( m_pPortalViewTextures[iSlot] );
+	}
+
+	return m_pPortalRTMaterial[iSlot];
 }
 
 #endif // PORTAL

@@ -19,6 +19,8 @@
 #include "utlvector.h"
 #include "mathlib/vector.h"
 #include "materialsystem/imaterialsystem.h"
+#include "materialsystem/MaterialSystemUtil.h"
+#include "materialsystem/imaterialvar.h"
 
 class CViewRender;
 struct CViewSetup;
@@ -67,6 +69,10 @@ public:
 	// ---- per-frame rendering entry points (called from viewrender.cpp) ----
 	bool				DrawPortalsUsingStencils( CViewRender *pMainView );
 	bool				DrawPortalsToTextures( CViewRender *pMainView, const CViewSetup &cameraView );
+
+	// ---- render-target based through-portal rendering ----
+	// composites the exit-scene RTs onto the portal openings
+	bool				DrawPortalViewTargets( CViewRender *pMainView, CUtlVector<C_Prop_Portal *> &visiblePortals );
 	void				UpdateDepthDoublerTexture( const CViewSetup &view );
 	void				UpdatePortalPixelVisibility( void );
 	void				ShiftFogForExitPortalView( void );
@@ -87,6 +93,12 @@ private:
 	void				DrawPortalStencilQuad( C_Prop_Portal *pPortal );
 	void				DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32 &color );
 	void				DrawDormantPortalSurface( C_Prop_Portal *pPortal );
+	void				DrawPortalRTThroughQuad( C_Prop_Portal *pPortal, const VMatrix &matWorldToClip );
+	IMaterial			*GetPortalRTMaterial( int iPortalType );
+
+	// per-slot render target for the exit scene
+	IMaterial			*m_pPortalRTMaterial[2];
+	IMaterialVar		*m_pPortalRTBaseTex[2];
 
 	bool				m_bIsRenderingPortal;
 	int					m_iViewRecursionLevel;
