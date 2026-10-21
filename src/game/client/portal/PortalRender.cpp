@@ -19,6 +19,10 @@
 #include "view.h"
 #include "view_scene.h"
 #include "ivrenderview.h"
+
+//declared in viewrender.cpp; restores the app-level current view after an
+//in-scene deeper view render (ViewDrawScene leaves it at the sub view).
+void SetupCurrentView( const Vector &vecOrigin, const QAngle &angles, view_id_t viewID );
 #include "cdll_client_int.h"
 #include "materialsystem/imesh.h"
 #include "tier2/tier2.h"
@@ -48,6 +52,12 @@ ConVar portal_rt_mode( "portal_rt_mode", "1", FCVAR_CHEAT,
 // on every driver we support; if a target ever samples upside-down, toggle this.
 ConVar portal_rt_vflip( "portal_rt_vflip", "1", FCVAR_CHEAT,
 	"1 = sample the exit RT with v flipped (normal), 0 = raw v." );
+
+// Diagnostic: draw the composite quad with the proven solid-color quad path
+// (DrawWorldQuad) instead of the RT material. Proves the quad geometry and
+// depth position independently of the RT texture and material.
+ConVar portal_rt_solid( "portal_rt_solid", "0", FCVAR_CHEAT,
+	"1 = draw the opening quad flat magenta (geometry/depth check)." );
 
 // Temporary visual aid: draws the opening's outline and normal with the debug
 // overlay so the geometry can be verified even if the portal surfaces do not
@@ -263,17 +273,26 @@ void CPortalRender::OverlayPortalRenderTargets( float w, float h )
 {
 	CMatRenderContextPtr pRenderContext( materials );
 
-	IMaterial *pMaterials[2];
-	pMaterials[0] = materials->FindMaterial( "Engine/debug_portal_1", TEXTURE_GROUP_OTHER );
-	pMaterials[1] = materials->FindMaterial( "Engine/debug_portal_2", TEXTURE_GROUP_OTHER );
-
-	for ( int i = 0; i < 2; ++i )
+	//draw the exit-scene targets with the very materials the RT composite
+	//uses, so the overlay shows exactly what the openings are textured with
+	for ( int iSlot = 0; iSlot < 2; ++iSlot )
 	{
-		if ( pMaterials[i] == NULL )
+		IMaterial *pMaterial = GetPortalRTMaterial( ( iSlot == 0 ) ? PORTAL_TYPE_BLUE : PORTAL_TYPE_ORANGE );
+		if ( pMaterial == NULL )
 			continue;
 
-		pRenderContext->DrawScreenSpaceRectangle( pMaterials[i], i * w, 0, w, h,
-			0.0f, 0.0f, w - 1.0f, h - 1.0f, w, h );
+		int iSrcWidth = 256;
+		int iSrcHeight = 256;
+		if ( m_pPortalViewTextures[iSlot] != NULL )
+		{
+			iSrcWidth = m_pPortalViewTextures[iSlot]->GetActualWidth();
+			iSrcHeight = m_pPortalViewTextures[iSlot]->GetActualHeight();
+		}
+
+		pRenderContext->DrawScreenSpaceRectangle( pMaterial,
+			iSlot * ( w * 0.5f ), 0, w * 0.5f, h * 0.5f,
+			0.0f, 0.0f, (float)( iSrcWidth - 1 ), (float)( iSrcHeight - 1 ),
+			iSrcWidth, iSrcHeight );
 	}
 }
 
@@ -902,6 +921,15 @@ bool CPortalRender::DrawPortalViewTargets( CViewRender *pMainView, CUtlVector<C_
 		portalView.width = m_pPortalViewTextures[iSlot]->GetActualWidth();
 		portalView.height = m_pPortalViewTextures[iSlot]->GetActualHeight();
 
+		//the deeper render rewrites the app-level current view: ViewDrawScene
+		//leaves CurrentViewOrigin/Angles and the view id at the EXIT camera,
+		//which lives on the other side of the portal plane. Save them here and
+		//restore after the pop, or the composite quad below is nudged toward
+		//the exit camera (into the wall) and never passes the depth test.
+		Vector vecOldOrigin = CurrentViewOrigin();
+		QAngle vecOldAngles = CurrentViewAngles();
+		int iOldViewID = (int)CurrentViewID();
+
 		//render the exit scene into the per-slot render target; the local
 		//frustum scratch matches the DrawMonitors pattern (Push3DView fills it
 		//from the view setup - the main view's frustum must not be reused)
@@ -909,6 +937,9 @@ bool CPortalRender::DrawPortalViewTargets( CViewRender *pMainView, CUtlVector<C_
 		render->Push3DView( portalView, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH, m_pPortalViewTextures[iSlot], (VPlane *)frustum );
 		pMainView->ViewDrawScene( false, SKYBOX_NOT_VISIBLE, portalView, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH, VIEW_MONITOR );
 		render->PopView( (VPlane *)frustum );
+
+		//restore the current view the deeper render overwrote
+		SetupCurrentView( vecOldOrigin, vecOldAngles, (view_id_t)iOldViewID );
 
 		DrawPortalRTThroughQuad( pEnterPortal );
 		bDrewAny = true;
@@ -950,6 +981,15 @@ void CPortalRender::DrawPortalRTThroughQuad( C_Prop_Portal *pPortal )
 	vecQuad[1] = vBR + vecNudge;
 	vecQuad[2] = vTR + vecNudge;
 	vecQuad[3] = vTL + vecNudge;
+
+	//diagnostic: repaint the opening flat magenta through the proven quad path
+	if ( portal_rt_solid.GetBool() )
+	{
+		color32 color;
+		color.r = 255; color.g = 0; color.b = 255; color.a = 255;
+		DrawWorldQuad( vecQuad, color );
+		return;
+	}
 
 	//uv for each corner: its own screen position in this view
 	Vector2D vecUV[4];
@@ -1008,6 +1048,12 @@ IMaterial *CPortalRender::GetPortalRTMaterial( int iPortalType )
 		if ( m_pPortalRTMaterial[iSlot] != NULL )
 		{
 			m_pPortalRTBaseTex[iSlot] = m_pPortalRTMaterial[iSlot]->FindVar( "$basetexture", NULL );
+
+			//Force the material to decide its vertex format up front. Without
+			//this a lazily created GetVertexFormat()==0 makes GetDynamicMesh()
+			//hand back a zero-size vertex buffer and the composite quad
+			//rasterises nothing (same pitfall as GetPortalSurfaceMaterial).
+			m_pPortalRTMaterial[iSlot]->Refresh();
 		}
 	}
 

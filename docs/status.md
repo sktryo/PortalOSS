@@ -157,6 +157,13 @@ testchmb_a_00` のロードまで確認できています。マップ内のポ�
   原理に統一済みです。RT をサンプリングした結果が上下反転する場合は
   `portal_rt_vflip` を 0 に変えられます。実機での見た目検証は継続中です。
   不整合があれば `portal_rt_mode 0` の旧ステンシル経路と比較できます。
+- 切り分け用のコマンド:
+  - `mat_showcamerarendertarget 1` — `_rt_Portal1`(左半分=青)/
+    `_rt_Portal2`(右半分=橙)を画面に表示。RT 方式合成と同一マテリアルで描く
+  - `portal_rt_solid 1` — 合成クアッドを実績済み単色クアッド経路で表示。
+    幾何・深度は正しくて RT/UV のみが疑われるときに使う
+  - 合成マテリアルは作成直後に `Refresh()` しておく必要がある
+    (`GetDynamicMesh()` のゼロサイズ頂点バッファ問題。既知の落とし穴)
 - ポータル表面は `debug/debugvertexcolor` で描画しており、
   Portal 本編のポータルマテリアル/シェーダーは使用していません。
 - `portal_render_targets_enabled` は `_rt_Portal1` / `_rt_Portal2` への
