@@ -297,9 +297,31 @@ RecvPropArray3( RECVINFO_ARRAY( m_vPortalCorners ),
 `g_pPortalRender` はファイルスコープの静的インスタンスを指すため、
 `viewrender.cpp` などから常に非 NULL で参照できます。
 
-#### ステンシル方式
+#### RT 方式(既定)
 
-`DrawPortalsUsingStencils()`:
+既定 (`portal_rt_mode 1`) では、`DrawPortalsUsingStencils()` は可視ポータルを
+収集した後、`DrawPortalViewTargets()` に処理を委譲します。
+
+`DrawPortalViewTargets()`:
+
+1. 各可視ポータルの仮想出口ビューを `BuildPortalView()` で構築
+2. `Push3DView()` で出口シーンを `_rt_Portal1` / `_rt_Portal2` に描画
+   (`ViewDrawScene(VIEW_MONITOR)`)。このとき実描画で使われる
+   `MATERIAL_VIEW` / `MATERIAL_PROJECTION` を値コピーで保持
+3. `clip = proj * view * world` を合成し、開口部の 4 頂点を出口カメラで
+   投影 → NDC → UV に変換
+4. 開口部に透視正解なワールド空間クアッドとして RT を合成
+   (`DrawPortalRTThroughQuad()`)
+
+出口シーンが独立レンダーターゲット内に閉じるため、メインシーンとの
+深度・ステンシルのフレーム毎の競合が無くなり、カメラ移動でも安定します。
+
+`portal_render_targets_enabled` (既定 0) はモニター用のデバッグ経路
+(`DrawPortalsToTextures()`)で、RT 方式の合成とは別です。
+
+#### ステンシル方式(代替)
+
+`portal_rt_mode 0` のときの従来経路:
 
 1. `AllPortals` から視界内の有効なポータルを収集
 2. ポータル開口部をステンシルバッファに描画 (`INCR`)
@@ -317,11 +339,6 @@ RecvPropArray3( RECVINFO_ARRAY( m_vPortalCorners ),
 現在は `debug/debugvertexcolor` マテリアルを使う簡易表示です。
 
 #### レンダーターゲット
-
-`DrawPortalsToTextures()` は `_rt_Portal1` / `_rt_Portal2` に
-ポータル越しの view を描画する代替経路です。
-`portal_render_targets_enabled` (既定 0) が true のときだけ動作します。
-通常のゲームプレイはステンシル経路を使用します。
 
 `portal_render_targets.cpp` は水面リフレクション/リフラクション用の
 追加レンダーターゲットを再帰レベルごとに管理します。
@@ -349,7 +366,7 @@ RecvPropArray3( RECVINFO_ARRAY( m_vPortalCorners ),
 | `game/server/util.cpp` | (ポータル用の削除フックは使用しない) |
 | `game/server/basecombatcharacter.cpp` | ポータル越しの視線判定 |
 | `game/server/hl2/hl2_player.cpp` | `player` クラス登録の無効化、クロスヘア入力 |
-| `game/client/viewrender.cpp` | ステンシル描画、水面/フォグ連携 |
+| `game/client/viewrender.cpp` | RT/ステンシル描画フック、水面/フォグ連携 |
 | `game/client/view_beams.cpp` | ビームのポータル貫通 |
 | `game/client/hud_crosshair.cpp` | クロスヘア抑制 |
 | `game/shared/baseentity_shared.cpp` | `FireBullets` のポータル trace |
