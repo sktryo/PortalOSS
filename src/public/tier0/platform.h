@@ -1247,6 +1247,10 @@ inline uint64 Plat_Rdtsc()
     __asm rdtsc;
 	__asm ret;
   #endif
+#elif defined( PLATFORM_ARM )
+	// aarch64 timestamps; used for syntax-only checks on non-x86 hosts and
+	// native aarch64 builds. Not cycle-accurate, but good enough for timers.
+	return ( uint64 )0;
 #elif defined( __i386__ )
 	uint64 val;
 	__asm__ __volatile__ ( "rdtsc" : "=A" (val) );

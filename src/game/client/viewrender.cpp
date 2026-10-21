@@ -2856,6 +2856,16 @@ void CViewRender::ViewDrawScene_PortalStencil( const CViewSetup &viewIn, ViewCus
 	//generate unique view ID's for each stencil view
 	view_id_t iNewViewID = (view_id_t)g_pPortalRender->GetCurrentViewId();
 	SetupCurrentView( view.origin, view.angles, (view_id_t)iNewViewID );
+
+	// The child world views below (CSimpleWorldView, CAboveWaterView, ...) never
+	// push their own camera: CBaseWorldView::DrawSetup only calls Push3DView when
+	// AdjustView() reports a water reflection/refraction target, which is false
+	// for a portal hole. Without an explicit push the exit scene is rendered
+	// through the *main* camera, so the hole just shows the wall we look through.
+	// Push the portal camera here and pop it after the whole stencil scene.
+	CMatRenderContextPtr pStencilRenderContext( materials );
+	render->Push3DView( view, 0, NULL, GetFrustum() );
+	pStencilRenderContext.SafeRelease();
 	
 	// update vis data
 	unsigned int visFlags;
@@ -2957,6 +2967,11 @@ void CViewRender::ViewDrawScene_PortalStencil( const CViewSetup &viewIn, ViewCus
 	// Return to the previous view
 	SetupCurrentView( vecOldOrigin, vecOldAngles, (view_id_t)iCurrentViewID );
 	g_CurrentViewID = iCurrentViewID; //just in case the cast to view_id_t screwed up the id #
+
+	// remove the portal camera pushed at the top of this stencil view
+	CMatRenderContextPtr pStencilPopRenderContext( materials );
+	pStencilPopRenderContext.SafeRelease();
+	render->PopView( GetFrustum() );
 
 
 	//swap back the water render targets
