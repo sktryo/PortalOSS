@@ -304,17 +304,23 @@ RecvPropArray3( RECVINFO_ARRAY( m_vPortalCorners ),
 
 `DrawPortalViewTargets()`:
 
-1. 各可視ポータルの仮想出口ビューを `BuildPortalView()` で構築
-2. `Push3DView()` で出口シーンを `_rt_Portal1` / `_rt_Portal2` に描画
-   (`ViewDrawScene(VIEW_MONITOR)`)。このとき実描画で使われる
-   `MATERIAL_VIEW` / `MATERIAL_PROJECTION` を値コピーで保持
-3. `clip = proj * view * world` を合成し、開口部の 4 頂点を出口カメラで
-   投影 → NDC → UV に変換
-4. 開口部に透視正解なワールド空間クアッドとして RT を合成
-   (`DrawPortalRTThroughQuad()`)
+1. 各可視ポータルの仮想出口ビューを `BuildPortalView()` で構築。
+   出口ビューは「このカメラをポータル変換したもので、fov / アスペクト比は
+   メインビューと同一」。RT はメインビューのアスペクトに揃えた解像度
+   (幅 256 高さ 256/aspect)で `_rt_Portal1` / `_rt_Portal2` に作成
+2. `Push3DView()` で出口シーンを RT に描画 (`ViewDrawScene(VIEW_MONITOR)`)。
+   ビューポートは RT の実寸 (`GetActualWidth/Height`) に合わせ、
+   frustum は DrawMonitors と同様にビュー毎にローカルに再構築
+3. 合成 (`DrawPortalRTThroughQuad()`): 出口ビューはメインカメラの
+   正確なテレポートなので、**穴のある画面位置と RT の同じ UV 座標には
+   同じレイが映る** (ステンシル方式の画素対応と同一原理)。
+   よって開口部 4 頂点の UV は、`ScreenTransform()` による
+   このビューでの投影そのものを用いる (出口カメラで再投影しない)
 
 出口シーンが独立レンダーターゲット内に閉じるため、メインシーンとの
 深度・ステンシルのフレーム毎の競合が無くなり、カメラ移動でも安定します。
+RT をサンプリングした結果が上下反転に見える場合は `portal_rt_vflip`
+(既定 1=v 反転して標準規約) を 0 に変えます。
 
 `portal_render_targets_enabled` (既定 0) はモニター用のデバッグ経路
 (`DrawPortalsToTextures()`)で、RT 方式の合成とは別です。

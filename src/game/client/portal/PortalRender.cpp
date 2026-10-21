@@ -17,6 +17,8 @@
 #include "c_prop_portal.h"
 #include "viewrender.h"
 #include "view.h"
+#include "view_scene.h"
+#include "ivrenderview.h"
 #include "cdll_client_int.h"
 #include "materialsystem/imesh.h"
 #include "tier2/tier2.h"
@@ -41,6 +43,11 @@ ConVar portal_render_targets_enabled( "portal_render_targets_enabled", "0", FCVA
 //      portal opening (the classic, movement-stable Portal technique)
 ConVar portal_rt_mode( "portal_rt_mode", "1", FCVAR_CHEAT,
 	"0 = stencil through-views, 1 = render-target through-views." );
+
+// The exit view fills its render target with texture v = 0 at the image top
+// on every driver we support; if a target ever samples upside-down, toggle this.
+ConVar portal_rt_vflip( "portal_rt_vflip", "1", FCVAR_CHEAT,
+	"1 = sample the exit RT with v flipped (normal), 0 = raw v." );
 
 // Temporary visual aid: draws the opening's outline and normal with the debug
 // overlay so the geometry can be verified even if the portal surfaces do not
@@ -824,11 +831,13 @@ bool CPortalRender::DrawPortalsToTextures( CViewRender *pMainView, const CViewSe
 //-----------------------------------------------------------------------------
 // Purpose: render-target based through-portal rendering. For every visible
 //			portal, render the exit scene (from the transform of the local
-//			camera through the portal) into a render target, then composite
-//			that RT onto the opening as a textured world-space quad whose UVs
-//			are the exit camera's projection of each opening corner. This is the
-//			classic Portal technique and, unlike the stencil in-framebuffer
-//			path, it has no per-frame depth/stencil coupling with the main
+//			camera through the portal, same fov/aspect) into a render target,
+//			then composite that RT onto the opening as a textured world-space
+//			quad. Because the exit view is this view's exact teleport, the
+//			opening's screen position and the RT uv at the same coordinates
+//			show matching rays - so the quad samples the RT by its own screen
+//			position, the same frames of reference the stencil path relies on.
+//			This path has no per-frame depth/stencil coupling with the main
 //			scene, so it stays stable while the camera moves.
 // Return : true if any portal's through-view was composited
 //-----------------------------------------------------------------------------
@@ -839,16 +848,33 @@ bool CPortalRender::DrawPortalViewTargets( CViewRender *pMainView, CUtlVector<C_
 	if ( !pMainView )
 		return false;
 
-	//create/refresh the portal view render targets if needed
+	//create/refresh the portal view render targets if needed. The exit view must
+	//use exactly the same fov and aspect as this view, so size the RT to this
+	//view's aspect: then a hole pixel and the RT pixel at the same texture uv
+	//show matching rays, and the opening can be filled with the RT sampled by
+	//the opening screen position itself (the same frames of reference the
+	//stencil path relies on, without a stencil buffer).
 	if ( m_bPortalViewTargetsCreated == false )
 	{
 		m_bPortalViewTargetsCreated = true;
+
+		int iWidth = 256;
+		int iHeight = 256;
+		const CViewSetup *pPlayerView = pMainView->GetPlayerViewSetup();
+		if ( pPlayerView != NULL && pPlayerView->width > 0 && pPlayerView->height > 0 )
+		{
+			float flAspect = (float)pPlayerView->width / (float)pPlayerView->height;
+			iHeight = (int)( (float)iWidth / flAspect + 0.5f );
+			if ( iHeight < 64 )
+				iHeight = 64;
+		}
+
 		m_pPortalViewTextures[0].Init( materials->CreateNamedRenderTargetTextureEx2(
-			"_rt_Portal1", 256, 256, RT_SIZE_PICMIP,
+			"_rt_Portal1", iWidth, iHeight, RT_SIZE_PICMIP,
 			materials->GetBackBufferFormat(), MATERIAL_RT_DEPTH_SHARED,
 			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT, 0 ) );
 		m_pPortalViewTextures[1].Init( materials->CreateNamedRenderTargetTextureEx2(
-			"_rt_Portal2", 256, 256, RT_SIZE_PICMIP,
+			"_rt_Portal2", iWidth, iHeight, RT_SIZE_PICMIP,
 			materials->GetBackBufferFormat(), MATERIAL_RT_DEPTH_SHARED,
 			TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT, 0 ) );
 	}
@@ -866,35 +892,25 @@ bool CPortalRender::DrawPortalViewTargets( CViewRender *pMainView, CUtlVector<C_
 		if ( m_pPortalViewTextures[iSlot] == NULL )
 			continue;
 
-		//build the virtual view through the enter portal
+		//build the virtual view through the enter portal. the view setup keeps
+		//this view's fov and aspect, and is dimensioned to the RT's actual size
+		//(picmip may have downscaled the texture) so the viewport fills the RT
 		CViewSetup portalView;
 		BuildPortalView( pEnterPortal, pMainView, portalView );
 		portalView.x = 0;
 		portalView.y = 0;
-		portalView.width = 256;
-		portalView.height = 256;
+		portalView.width = m_pPortalViewTextures[iSlot]->GetActualWidth();
+		portalView.height = m_pPortalViewTextures[iSlot]->GetActualHeight();
 
-		//render the exit scene into the per-slot render target and, while the
-		//exit camera is current, capture its actual view+projection matrices
-		//(the very ones ViewDrawScene uses to fill the RT) so the opening quad
-		//is textured with exactly the image that camera produced. Copied by
-		//value because the render context matrices change once we pop the view.
-		render->Push3DView( portalView, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH, m_pPortalViewTextures[iSlot], pMainView->GetFrustum() );
-
-		VMatrix matView, matProj;
-		{
-			CMatRenderContextPtr pRTContext( materials );
-			pRTContext->GetMatrix( MATERIAL_VIEW, &matView );
-			pRTContext->GetMatrix( MATERIAL_PROJECTION, &matProj );
-		}
-
+		//render the exit scene into the per-slot render target; the local
+		//frustum scratch matches the DrawMonitors pattern (Push3DView fills it
+		//from the view setup - the main view's frustum must not be reused)
+		Frustum frustum;
+		render->Push3DView( portalView, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH, m_pPortalViewTextures[iSlot], (VPlane *)frustum );
 		pMainView->ViewDrawScene( false, SKYBOX_NOT_VISIBLE, portalView, VIEW_CLEAR_COLOR | VIEW_CLEAR_DEPTH, VIEW_MONITOR );
-		render->PopView( pMainView->GetFrustum() );
+		render->PopView( (VPlane *)frustum );
 
-		VMatrix matWorldToClip;
-		MatrixMultiply( matProj, matView, matWorldToClip );	// clip = proj * view * world
-
-		DrawPortalRTThroughQuad( pEnterPortal, matWorldToClip );
+		DrawPortalRTThroughQuad( pEnterPortal );
 		bDrewAny = true;
 	}
 
@@ -903,11 +919,12 @@ bool CPortalRender::DrawPortalViewTargets( CViewRender *pMainView, CUtlVector<C_
 
 //-----------------------------------------------------------------------------
 // Purpose: draw a world-space quad at the enter portal's opening, textured with
-//			the exit render target. Each opening corner's UV is that corner's
-//			projection through the exit camera (matWorldToClip is the exit view's
-//			combined world->clip), which places the exit image perspective-correctly.
+//			the exit render target. The exit view is this view teleported
+//			through the portal with the same fov/aspect, so a hole pixel and the
+//			RT pixel at the same texture uv show the matching ray. Each
+//			corner's UV is therefore its own projection in this view.
 //-----------------------------------------------------------------------------
-void CPortalRender::DrawPortalRTThroughQuad( C_Prop_Portal *pPortal, const VMatrix &matWorldToClip )
+void CPortalRender::DrawPortalRTThroughQuad( C_Prop_Portal *pPortal )
 {
 	CMatRenderContextPtr pRenderContext( materials );
 
@@ -934,20 +951,19 @@ void CPortalRender::DrawPortalRTThroughQuad( C_Prop_Portal *pPortal, const VMatr
 	vecQuad[2] = vTR + vecNudge;
 	vecQuad[3] = vTL + vecNudge;
 
-	//compute each corner's UV by projecting it through the exit camera
+	//uv for each corner: its own screen position in this view
 	Vector2D vecUV[4];
 	for ( int c = 0; c < 4; ++c )
 	{
-		Vector4D world( vecQuad[c].x, vecQuad[c].y, vecQuad[c].z, 1.0f );
-		Vector4D clip;
-		matWorldToClip.V4Mul( world, clip );
-		float flW = clip.w;
-		if ( fabsf( flW ) < 0.0001f )
-			flW = 0.0001f;
-		float flNdcX = clip.x / flW;
-		float flNdcY = clip.y / flW;
-		vecUV[c].x = ( flNdcX + 1.0f ) * 0.5f;
-		vecUV[c].y = ( 1.0f - flNdcY ) * 0.5f;	// flip Y: NDC up -> texture top
+		Vector screen;
+		if ( ScreenTransform( vecQuad[c], screen ) != 0 )
+		{
+			//corner behind the camera; clamp so the quad still rasterises
+			screen.x = ( screen.x >= 0.0f ) ? 4.0f : -4.0f;
+			screen.y = ( screen.y >= 0.0f ) ? 4.0f : -4.0f;
+		}
+		vecUV[c].x = ( screen.x + 1.0f ) * 0.5f;
+		vecUV[c].y = portal_rt_vflip.GetBool() ? ( 1.0f - screen.y ) * 0.5f : ( screen.y + 1.0f ) * 0.5f;
 	}
 
 	//texture winding may be flipped; keep two-sided so the quad always draws

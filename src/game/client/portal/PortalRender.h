@@ -93,7 +93,7 @@ private:
 	void				DrawPortalStencilQuad( C_Prop_Portal *pPortal );
 	void				DrawPortalQuadColored( C_Prop_Portal *pPortal, const color32 &color );
 	void				DrawDormantPortalSurface( C_Prop_Portal *pPortal );
-	void				DrawPortalRTThroughQuad( C_Prop_Portal *pPortal, const VMatrix &matWorldToClip );
+	void				DrawPortalRTThroughQuad( C_Prop_Portal *pPortal );
 	IMaterial			*GetPortalRTMaterial( int iPortalType );
 
 	// per-slot render target for the exit scene
